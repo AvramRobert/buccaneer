@@ -1,0 +1,44 @@
+1.
+TODO: Implement some type of dynamic matching of input -> command & args interpolation.
+A command can have multiple variations of arguments, it should be possible that, given an input,
+the most appropriate one be selected from defined n. Otherwise an error is reported
+
+2.
+TODO: The fairly localized mapping of the new error message makes it, sort of, impossible to externally define error messages, because they simply get overridden
+Similar to "unnamed" and "named", add a function for the association command <-> args, without directly calling `:>>`
+This could then be treated as a simple combinator that also accepts an error message
+
+Example:
+  command("add")
+  .dashedArgument("A").param[Int].param[Double] withErr ("Nonono")
+  .doubleDashedArgument("B") withErr ("Hello")
+  .dashedArgument("A").orElse(_.doubleDashed("A")) withErr ("Nay I say")
+
+3.
+IDEA: Differentiation between argument types is sort of redundant and becomes problematic when trying to compose them (hint hint: named param)
+Simplify this to some `Argument` ADT and simply let the user define what prefixes he might or might not want to have
+ case class Argument(v: String) extends Symbol
+
+   command("add")
+    .argument("-A").orElse("--A").param[Int]
+    .argument("-B").param[Double]
+
+
+4.
+TODO: Test Traverse laws for Interpolation
+
+5.
+IDEA: Look at Applicative for a more suitable replacement for Interpolation
+The problem with the current way of thought is that, if I am to separate the types from the creation of a command,
+I lose type information. This I cannot recover, which means that when I am to apply the actual command function,
+the tuples I propagate lose their concrete type and get inferred to `Any`.
+This is somewhat problematic to deal with.
+
+One alternative is to use Applicative and `ap`. This naturally propagates the types the way I want and also doesn't rely
+on tuples. It directly contains a function of appropriate arity.
+The main problem with this is the integration of syntax-checking and accumulation of `Unit` types.
+Most of the parameters used in a command are simply options. They do not require any input of some type. They simply need
+to be specified. These are then simply dealt with as `Unit`s. The problem is that `ap` propagates them also and
+I get a function whose values are mostly ignored.
+If I may be able to find a way around this, somehow manipulate the function arity based on type, then this might be a
+better solution than the HList alternative.
