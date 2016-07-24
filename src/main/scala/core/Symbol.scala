@@ -7,21 +7,24 @@ object Symbol {
 object Sym {
   def named(label: String): Inter[Sym] = Inter.lift(Named(label))
 
-  def unnamed: Inter[Sym] = Inter.lift(Unnamed)
+  def typ: Inter[Sym] = Inter.lift(Type)
+
+  def assign(label: String, operator: String): Inter[Sym] = Inter.lift(Assign(label, operator))
 }
 
-sealed trait Sym {
-  def isNamed: Boolean = this match {
-    case Named(_) => true
-    case _ => false
-  }
+case class Docs(description: String, errorMessage: String)
 
-  def notNamed: Boolean = this match {
-    case Unnamed => true
+// TODO: Each symbol should have some `Docs` element
+sealed trait Sym {
+  def docs: Docs = Docs("t", "a")
+
+  def isTyped: Boolean = this match {
+    case Type => true
+    case Assign(_, _) => true
     case _ => false
   }
 }
 
 case class Named(label: String) extends Sym
-
-case object Unnamed extends Sym
+case class Assign(label: String, operator: String) extends Sym
+case object Type extends Sym

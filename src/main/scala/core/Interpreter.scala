@@ -11,7 +11,7 @@ import scalaz.syntax.either._
 object Interpreter {
   type Result[A] = ValidationNel[Throwable, A]
 
-  def run[A](runner: Runner[A]): List[String] => ValidationNel[Throwable, A] = input => {
+  def run[A](runner: Runner[A]): List[String] => Result[A] = input => {
     (SyntaxChecker(runner) andThen TypeChecker(runner)) (input)
   }
 }
@@ -19,7 +19,7 @@ object Interpreter {
 object SyntaxChecker {
   def apply[A](runner: Runner[A]): List[String] => Result[Inter[(Sym, String)]] = input => {
     if (input.length != runner.syntax.depth) {
-      new Throwable("Wrong argument arity: Insufficient or superflous number of arguments").failureNel
+      new Throwable("Wrong argument arity: Insufficient or superfluous number of arguments").failureNel
     }
     else {
       val zipped = runner.syntax zipL input
@@ -27,19 +27,27 @@ object SyntaxChecker {
     }
   }
 
-
   def interpret(sym: Sym, input: String): \/[Throwable, String] = sym match {
     case Named(label) =>
       if (label == input) input.right
       else new Throwable(s"Input of `$input` does not match expected `$label`").left
-    case Unnamed => input.right
+    case Type => input.right
+    case Assign(label, op) =>
+      if (input startsWith (label + op)) input.right
+      else new Throwable(s"Inproper assignment in `$label`").left
   }
 }
 
 object TypeChecker {
   def apply[A, C](runner: Runner[A]): Result[Inter[(Sym, String)]] => Result[A] = syntax => {
-    val types = syntax map (_.filterL(_._1.notNamed)) map (_.map(_._2))
-    types flatMap (list => runner.types run list _2)
+    syntax flatMap (normalise _ andThen runner.run)
+  }
+
+  def normalise(syntax: Inter[(Sym, String)]): List[String] = {
+    syntax filterL (_._1 isTyped) map {
+      case ((Assign(l, op), input)) => (input split op) (1)
+      case (_, input) => input
+    }
   }
 }
 

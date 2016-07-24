@@ -28,21 +28,43 @@ object Command {
   }
 }
 
+/*
+ * Errors should be something similar to:
+ *
+ * command("add")("A command that does something").error("Command should be `add`, you moron")
+ *  .named[Int]("a")("First named parameter of type `Int`")
+ *  .named[Int]("b")("Second named parameter of type `Int`")
+ */
+
 sealed trait Command[+A]
 
-case class Runner[A](types: TypedParams[A], syntax: Inter[Sym]) extends Command[A]
+final case class Runner[A](types: TypedParams[A], syntax: Inter[Sym]) extends Command[A] {
+  def run(params: List[String]): Interpreter.Result[A] = types run params _2
+}
 
-case class P0(param0: Inter[Sym]) extends Command[Nothing] {
-  def named[A](label: String)(implicit m: Mapper[String, A]) = P1(morph(m.apply), param0 affix Sym.named(label) infix Sym.unnamed)
+final case class P0(param0: Inter[Sym]) extends Command[Nothing] {
+  def named[A](label: String)(implicit m: Mapper[String, A]) = P1(morph(m.apply), param0 affix Sym.named(label) infix Sym.typ)
 
-  case class P1[A](type1: TypedParams[A], param1: Inter[Sym]) extends Command[A] {
-    def named[B](label: String)(implicit m: Mapper[String, B]) = P2(morph(m.apply), param1 affix Sym.named(label) infix Sym.unnamed)
+  def unnamed[A](implicit m: Mapper[String, A]) = P1(morph(m.apply), param0 affix Sym.typ)
+
+  def assignment[A](label: String, operator: String = "=")(implicit m: Mapper[String, A]) = P1(morph(m.apply), param0 affix Sym.assign(label, operator))
+
+  final case class P1[A](type1: TypedParams[A], param1: Inter[Sym]) extends Command[A] {
+    def named[B](label: String)(implicit m: Mapper[String, B]) = P2(morph(m.apply), param1 affix Sym.named(label) infix Sym.typ)
+
+    def unnamed[B](implicit m: Mapper[String, B]) = P2(morph(m.apply), param1 affix Sym.typ)
+
+    def assignment[B](label: String, operator: String = "=")(implicit m: Mapper[String, B]) = P2(morph(m.apply), param1 affix Sym.assign(label, operator))
 
     def apply[B](f: A => B) = Runner(app.map(type1)(f), param1)
 
 
-    case class P2[B](type2: TypedParams[B], param2: Inter[Sym]) extends Command[B] {
-      def named[C](label: String)(implicit m: Mapper[String, C]) = P1(morph(m.apply), param2 affix Sym.named(label) infix Sym.unnamed)
+    final case class P2[B](type2: TypedParams[B], param2: Inter[Sym]) extends Command[B] {
+      def named[C](label: String)(implicit m: Mapper[String, C]) = P1(morph(m.apply), param2 affix Sym.named(label) infix Sym.typ)
+
+      def unnamed[C](implicit m: Mapper[String, C]) = P1(morph(m.apply), param2 affix Sym.typ)
+
+      def assignment[C](label: String, operator: String = "=")(implicit m: Mapper[String, C]) = P1(morph(m.apply), param2 affix Sym.assign(label, operator))
 
       def apply[C](f: (A, B) => C) = Runner(app.apply2(type1, type2)(f), param2)
 
