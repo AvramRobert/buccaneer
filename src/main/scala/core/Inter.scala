@@ -7,11 +7,22 @@ import scalaz.syntax.applicative._
 object Inter {
   def lift[A](a: => A): Inter[A] = Acc(a, End)
 
-  def validate[A, B](inter: Inter[(A, B)])(f: (A, B) => Throwable \/ B): ValidationNel[Throwable, Inter[B]] = {
+  def validate[A](inter: Inter[A])(f: A => Throwable \/ A): ValidationNel[Throwable, Inter[A]] = {
     type λ[x] = ValidationNel[Throwable, x]
-    def valid(t: (A, B)): λ[B] = f(t._1, t._2).validation.toValidationNel
+    def valid(a: A): λ[A] = f(a).validation.toValidationNel
 
-    inter.traverse[λ, B](valid)
+    inter.traverse[λ, A](valid)
+  }
+}
+
+object :~ {
+  def unapply[A](a: Inter[A]): Option[(A, Inter[A])] = a match {
+    case Acc(p, r) => Some((p, r))
+    case Brid(l, r) => unapply(l) match {
+      case Some((az, i)) => Some((az, i affix r))
+      case None => unapply(r)
+    }
+    case End => None
   }
 }
 
@@ -53,13 +64,13 @@ sealed trait Inter[+A] {
     @annotation.tailrec
     def go(rest: Inter[A], acc: G[Inter[B] => Inter[B]]): G[Inter[B]] = rest match {
       case Acc(p, r) =>
-        val G = (f(p) |@| ap.point((b: B) => (i: Inter[B]) => Acc(b, i)))((b, g) => g(b))
-        go(r, (G |@| acc)(_ andThen _))
+        val G = (f(p) |@| ap.point((b: B) => (i: Inter[B]) => Acc(b, i))) ((b, g) => g(b))
+        go(r, (G |@| acc) (_ andThen _))
       case Brid(l, r) =>
         val GL = l.traverse(f)
         val G = GL map (nl => (i: Inter[B]) => Brid(nl, i))
-        go(r, (G |@| acc)(_ andThen _))
-      case End => acc map (_(End))
+        go(r, (G |@| acc) (_ andThen _))
+      case End => acc map (_ (End))
     }
     go(this, ap.point(identity[Inter[B]] _))
   }
@@ -76,7 +87,7 @@ sealed trait Inter[+A] {
   }
 
   def filterL(p: A => Boolean): List[A] = foldLeft(List.empty[A]) { (l, a) =>
-    if(p(a)) l.+:(a)
+    if (p(a)) l.+:(a)
     else l
   }.reverse
 
@@ -84,5 +95,7 @@ sealed trait Inter[+A] {
 }
 
 case class Acc[+A](point: A, rest: Inter[A]) extends Inter[A]
+
 case class Brid[+A](left: Inter[A], right: Inter[A]) extends Inter[A]
+
 case object End extends Inter[Nothing]

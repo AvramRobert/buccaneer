@@ -26,3 +26,9 @@ Simplify this to some `Argument` ADT and simply let the user define what prefixe
 
 4.
 TODO: Test Traverse laws for Interpolation
+
+5.
+Enhancement:
+Compile time command arity check. Commands that are similar enough to pass the syntax checker and resolver should be excluded at compile time.
+The `Mapper` is in itself a proof, that the input `String` is of, or can be converted to the given type. I might perhaps be able to use this
+as an eager type check to further narrow down the command to be run.
