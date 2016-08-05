@@ -6,44 +6,8 @@ import scalaz.syntax.validation._
 import scalaz.{Bind, Kleisli, ValidationNel, \/}
 import scalaz.syntax.either._
 import Validators._
-import shapeless.HMap
-import CMap._
-
-object CMap {
-  def typedMap[A] = TMap[A]()
-
-  def untypedMap = UMap[Any]()
-
-  sealed trait Get[M[_], A] {
-    def get(m: M[A])(key: Inter[Sym]): Option[Runner[A]]
-  }
-
-  class Bond[K, +V]
-
-  case class TMap[A](private val underlying: Map[Inter[Sym], Runner[A]] = Map[Inter[Sym], Runner[A]]()) {
-    lazy val keySet: Set[Inter[Sym]] = underlying.keySet
-
-    def +(r: Runner[A]): TMap[A] = TMap(underlying + (r.syntax -> r))
-
-    def get(key: Inter[Sym]): Option[Runner[A]] = underlying get key
-  }
-
-  case class UMap[A](private val underlying: HMap[Bond] = HMap.empty[Bond], keySet: Set[Inter[Sym]] = Set()) {
-    implicit def bond[V <: Any] = new Bond[Inter[Sym], V]
-
-    def +[B](r: Runner[B]): UMap[A] = UMap[A](underlying + (r.syntax -> r), keySet + r.syntax)
-
-    def get(key: Inter[Sym]): Option[Runner[A]] = underlying get[Inter[Sym], Runner[A]] key
-  }
-
-  implicit def getTMap[A]: Get[TMap, A] = new Get[TMap, A] {
-    override def get(m: TMap[A])(key: Inter[Sym]): Option[Runner[A]] = m get key
-  }
-
-  implicit def getUMap: Get[UMap, Any] = new Get[UMap, Any] {
-    override def get(m: UMap[Any])(key: Inter[Sym]): Option[Runner[Any]] = m get key
-  }
-}
+import core.Store.MapT
+import Store._
 
 //TODO: Can't I generalise this? Or should'nt I generalise this?
 object Interpreter {
@@ -58,9 +22,11 @@ object Interpreter {
 
   def step[A, B](f: A => Slight[B]): Step[A, B] = Kleisli[Slight, A, B](f)
 
-  def interpret[A](map: TMap[A]) = resolve(map.keySet) andThen run(map)(getTMap)
+  def interpret[A](cli: Cli[A]): Step[List[String], A] = interpret(cli.store)
 
-  def interpret(map: UMap[Any]) = resolve(map.keySet) andThen run(map)(getUMap)
+  def interpret[A](store: Store[Store.MapT, A]): Step[List[String], A] = resolve(store.keySet) andThen run(store)
+
+  def interpret[A](runner: Runner[A]): Step[List[String], A] = interpret(Store.empty + runner)
 
   def resolve(keySet: Set[Inter[Sym]]) =
     shape(keySet) andThen
@@ -100,9 +66,9 @@ object Interpreter {
     }
   }
 
-  def run[M[_], A](m: M[A])(implicit G: Get[M, A]) = step { (command: Inter[(Sym, String)]) =>
+  def run[A](m: Store[MapT, A]) = step { (command: Inter[(Sym, String)]) =>
     val key = command map (_._1)
-    G.get(m)(key)
+    m.get(key)
       .fold(new Throwable("Unknown command").failureNel[A]) { runner =>
         (normalise _ andThen runner.run) (command)
       }

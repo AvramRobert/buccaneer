@@ -1,6 +1,7 @@
 package core
 
 import core.Command._
+
 import scalaz.syntax.validation._
 import scala.util.{Failure, Success, Try}
 import scalaz.{State, _}
@@ -8,17 +9,6 @@ import scalaz.{State, _}
 object Command {
   type Result[A] = ValidationNel[Throwable, A]
   type TypedParams[A] = IndexedState[List[String], List[String], Result[A]]
-
-  def reify[A](f: Reified[A]): TypedParams[A] =
-    for {
-      params <- State.get[List[String]]
-      _ <- State.modify[List[String]](_.tail)
-    } yield {
-      Try(f(params.head)) match {
-        case Success(t) => t.successNel
-        case Failure(e) => e.failureNel
-      }
-    }
 
   def apply(label: String): P0 = P0(Inter.lift(Com(label)))
 
@@ -41,21 +31,38 @@ object Command {
 
     override def map[A, B](fa: TypedParams[A])(f: (A) => B): TypedParams[B] = fa map (_ map f)
   }
-
 }
 
-
 /*
- * Errors should be something similar to:
- *
- * command("add")("A command that does something").error("Command should be `add`, you moron")
- *  .named[Int]("a")("First named parameter of type `Int`")
- *  .named[Int]("b")("Second named parameter of type `Int`")
+ * TODO: Commands dictate the type
+ * At this point, I differentiate between the typed and untyped map, and also between the typed and untyped children.
+ * This works, but the problem is redundancy. Perhaps I might be able to capture the child spawning behaviour
+ * within some sort of generalized cli builder, whereby the differentiation between typed and untyped is
+ * made only once..
  */
-
-sealed trait Command[+A]
+// TODO: Try using sbt boilerplate for this: https://github.com/sbt/sbt-boilerplate
+/*
+ * Apparently spray does a similar thing like me.
+ * They have a path builder, which builds some sort of path
+ * by means of a builder `("path" / bla / bla)((a, b) => ... )`
+ * and then they supply a function block whereby the number of arguments is equal to the
+ * number of supplied sub-paths. And their types are (apparently) also consistent.
+ */
+sealed trait Command[+A] {
+  def reify[B](f: Reified[B]): TypedParams[B] =
+    for {
+      params <- State.get[List[String]]
+      _ <- State.modify[List[String]](_.tail)
+    } yield {
+      Try(f(params.head)) match {
+        case Success(t) => t.successNel
+        case Failure(e) => e.failureNel
+      }
+    }
+}
 
 final case class Runner[A](types: TypedParams[A], syntax: Inter[Sym]) extends Command[A] {
+  def map[B](f: A => B): Runner[B] = Runner[B](types.map(_ map f), syntax)
   def run(params: List[String]): Result[A] = types run params _2
 }
 

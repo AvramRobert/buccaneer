@@ -1,9 +1,5 @@
 package core
 
-object Symbol {
-
-}
-
 object Sym {
   def named(label: String): Inter[Sym] = Inter.lift(Named(label))
 

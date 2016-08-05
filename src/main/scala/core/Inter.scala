@@ -26,7 +26,7 @@ object :~ {
   }
 }
 
-
+// TODO: Isn't there a simpler algebra for representing the same idea?
 sealed trait Inter[+A] {
   def affix[AA >: A](inter: Inter[AA]): Inter[AA] = this match {
     case Acc(p, r) => Acc(p, r affix inter)
