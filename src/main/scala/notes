@@ -11,7 +11,7 @@ sbt-bolierplate for hlist => functionN conversion. See Command.
 
 
 === To implement ===
-1. Command and co. descriptions
+1. Command and co. descriptions // done
 2. Man page generation
 3. Fully specify and enrich `Command`
 4. Refactor and separate user interface from implementation details

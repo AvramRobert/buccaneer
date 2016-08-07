@@ -10,7 +10,7 @@ object Command {
   type Result[A] = ValidationNel[Throwable, A]
   type TypedParams[A] = IndexedState[List[String], List[String], Result[A]]
 
-  def apply(label: String): P0 = P0(Inter.lift(Com(label)))
+  def apply(label: String, desc: String = ""): P0 = P0(Sym.command(label, desc))
 
   implicit val tryB = new Bind[Try] {
     override def bind[A, B](fa: Try[A])(f: (A) => Try[B]): Try[B] = fa flatMap f
@@ -63,31 +63,32 @@ sealed trait Command[+A] {
 
 final case class Runner[A](types: TypedParams[A], syntax: Inter[Sym]) extends Command[A] {
   def map[B](f: A => B): Runner[B] = Runner[B](types.map(_ map f), syntax)
+
   def run(params: List[String]): Result[A] = types run params _2
 }
 
 final case class P0(param0: Inter[Sym]) extends Command[Nothing] {
-  def named[A](label: String)(implicit m: Reified[A]) = P1(reify(m), param0 affix Sym.named(label) infix Sym.typed[A])
+  def named[A](label: String, desc: String = "")(implicit m: Reified[A]) = P1(reify(m), param0 affix Sym.named(label, desc) infix Sym.typed[A])
 
   def unnamed[A](implicit m: Reified[A]) = P1(reify(m), param0 affix Sym.typed[A])
 
-  def assignment[A](label: String, operator: String = "=")(implicit m: Reified[A]) = P1(reify(m), param0 affix Sym.assign(label, operator))
+  def assignment[A](label: String, operator: String = "=", desc: String = "")(implicit m: Reified[A]) = P1(reify(m), param0 affix Sym.assign(label, operator, desc))
 
   final case class P1[A](type1: TypedParams[A], param1: Inter[Sym]) extends Command[A] {
-    def named[B](label: String)(implicit m: Reified[B]) = P2(reify(m), param1 affix Sym.named(label) infix Sym.typed[B])
+    def named[B](label: String, desc: String = "")(implicit m: Reified[B]) = P2(reify(m), param1 affix Sym.named(label, desc) infix Sym.typed[B])
 
     def unnamed[B](implicit m: Reified[B]) = P2(reify(m), param1 affix Sym.typed[B])
 
-    def assignment[B](label: String, operator: String = "=")(implicit m: Reified[B]) = P2(reify(m), param1 affix Sym.assign(label, operator))
+    def assignment[B](label: String, operator: String = "=", desc: String = "")(implicit m: Reified[B]) = P2(reify(m), param1 affix Sym.assign(label, operator, desc))
 
     def apply[B](f: A => B) = Runner(app.map(type1)(f), param1)
 
     final case class P2[B](type2: TypedParams[B], param2: Inter[Sym]) extends Command[B] {
-      def named[C](label: String)(implicit m: Reified[C]) = P1(reify(m), param2 affix Sym.named(label) infix Sym.typed[C])
+      def named[C](label: String, desc: String = "")(implicit m: Reified[C]) = P1(reify(m), param2 affix Sym.named(label, desc) infix Sym.typed[C])
 
       def unnamed[C](implicit m: Reified[C]) = P1(reify(m), param2 affix Sym.typed[C])
 
-      def assignment[C](label: String, operator: String = "=")(implicit m: Reified[C]) = P1(reify(m), param2 affix Sym.assign(label, operator))
+      def assignment[C](label: String, operator: String = "=", desc: String = "")(implicit m: Reified[C]) = P1(reify(m), param2 affix Sym.assign(label, operator, desc))
 
       def apply[C](f: (A, B) => C) = Runner(app.apply2(type1, type2)(f), param2)
 

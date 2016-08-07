@@ -39,7 +39,7 @@ object Interpreter {
       case l@h :: _ =>
         commands
           .filter {
-            case Com(a) :~ t => a == h
+            case Com(a, _) :~ t => a == h
             case _ => false
           }
           .filter(_.depth == l.size)
@@ -78,19 +78,19 @@ object Interpreter {
 object Validators {
   def normalise(syntax: Inter[(Sym, String)]): List[String] = {
     syntax filterL (_._1 isTyped) map {
-      case ((Assign(l, op), input)) => (input split op) (1)
+      case ((Assign(l, op, _), input)) => (input split op) (1)
       case (_, input) => input
     }
   }
 
   def syntax(assoc: (Sym, String)) = assoc._1 match {
-    case Com(label) =>
+    case Com(label, _) =>
       if (label == assoc._2) assoc.right
       else new Throwable(s"Input of `${assoc._2}` does not match expected `$label`").left
-    case Named(label) =>
+    case Named(label, _) =>
       if (label == assoc._2) assoc.right
       else new Throwable(s"Input of `${assoc._2}` does not match expected `$label`").left
-    case Assign(label, op) =>
+    case Assign(label, op, _) =>
       if (assoc._2 startsWith (label + op)) assoc.right
       else new Throwable(s"Improper assignment for `$label`").left
     case _ => assoc.right
