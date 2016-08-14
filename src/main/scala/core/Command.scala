@@ -31,15 +31,22 @@ object Command {
 
     override def map[A, B](fa: TypedParams[A])(f: (A) => B): TypedParams[B] = fa map (_ map f)
   }
+  //if there are no typed parameters needed, the normalisation propagates an empty list to the monad
+  //that is why i have to propagate a list with an empty string inside, if there are no types to parse and use
+  def runnerState[B](f: String => B): TypedParams[B] = {
+    for {
+      p <- State.get[List[String]]
+      _ <- State.modify[List[String]](_.tail)
+      h = p.head
+    } yield {
+      Try(f(h)) match {
+        case Success(b) => b.successNel
+        case Failure(e) => e.failureNel
+      }
+    }
+  }
 }
 
-/*
- * TODO: Commands dictate the type
- * At this point, I differentiate between the typed and untyped map, and also between the typed and untyped children.
- * This works, but the problem is redundancy. Perhaps I might be able to capture the child spawning behaviour
- * within some sort of generalized cli builder, whereby the differentiation between typed and untyped is
- * made only once..
- */
 // TODO: Try using sbt boilerplate for this: https://github.com/sbt/sbt-boilerplate
 /*
  * Apparently spray does a similar thing like me.
@@ -47,18 +54,11 @@ object Command {
  * by means of a builder `("path" / bla / bla)((a, b) => ... )`
  * and then they supply a function block whereby the number of arguments is equal to the
  * number of supplied sub-paths. And their types are (apparently) also consistent.
+ * I believe however, that they don't lazily apply the hlist, but do it directly.
+ * And that's why they might perhaps get more concrete type inference.
  */
 sealed trait Command[+A] {
-  def reify[B](f: Reified[B]): TypedParams[B] =
-    for {
-      params <- State.get[List[String]]
-      _ <- State.modify[List[String]](_.tail)
-    } yield {
-      Try(f(params.head)) match {
-        case Success(t) => t.successNel
-        case Failure(e) => e.failureNel
-      }
-    }
+  def reify[B](f: Reified[B]): TypedParams[B] = runnerState[B](f.apply)
 }
 
 final case class Runner[A](types: TypedParams[A], syntax: Inter[Sym]) extends Command[A] {
@@ -73,6 +73,10 @@ final case class P0(param0: Inter[Sym]) extends Command[Nothing] {
   def unnamed[A](implicit m: Reified[A]) = P1(reify(m), param0 affix Sym.typed[A])
 
   def assignment[A](label: String, operator: String = "=", desc: String = "")(implicit m: Reified[A]) = P1(reify(m), param0 affix Sym.assign(label, operator, desc))
+
+  def option(label: String, desc: String = ""): P0 = P0(param0 affix Sym.named(label, desc))
+
+  def apply[A](f: Unit => A) = Runner[A](runnerState(_ => f(())), param0)
 
   final case class P1[A](type1: TypedParams[A], param1: Inter[Sym]) extends Command[A] {
     def named[B](label: String, desc: String = "")(implicit m: Reified[B]) = P2(reify(m), param1 affix Sym.named(label, desc) infix Sym.typed[B])

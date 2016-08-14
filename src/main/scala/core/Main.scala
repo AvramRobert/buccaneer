@@ -1,6 +1,7 @@
 package core
 
 import Implicits._
+import Store._
 
 /*
  * TODO: Are type safe partial HMaps possible?
@@ -14,6 +15,7 @@ object Main {
   def main(args: Array[String]) = {
 
     def command(label: String, desc: String = "") = Command(label, desc)
+
     val add = command("add", "This is the add command")
 
     val addUnnamed =
@@ -42,66 +44,18 @@ object Main {
           a + b
         }
 
+    val store = Store.empty + addUnnamed + addNamed + addAssigned
 
     val params1 = List("add", "2", "3")
     val params2 = List("add", "a", "2", "b", "3")
     val params3 = List("add", "a:2", "b:3")
     val params4 = List("shift", "a", "1")
     val params5 = List("subtract", "5", "4")
+    val params6 = List("add", "--help")
+
+    println(Interpreter.interpretH(store).run(params6))
 
 
-    val cli =
-      Cli.
-        command(
-          label = "add",
-          desc = "Command for adding").
-
-        child {
-          _.
-            named[Int]("a", desc = "First named parameter, called `a`").
-            named[Int]("b", desc = "Second named parameter, called `b`").
-            apply(_ + _)
-        }.
-
-        child {
-          _.
-            unnamed[Int].
-            unnamed[Int].
-            apply(_ + _)
-        }.
-
-        child {
-          _.
-            assignment[Int]("a", ":").
-            assignment[Int]("b", ":").
-            apply(_ + _)
-        }.
-
-        command(
-          label = "subtract",
-          desc = "Command for subtracting").
-
-        child {
-          _.
-            named[Int]("a").
-            named[Int]("b").
-            apply(_ - _)
-        }.
-        child {
-          _.
-            unnamed[Int].
-            unnamed[Int].
-            apply(_ - _)
-        }.
-        command(
-          label = "check",
-          desc = "Command for checking").
-
-        childT {
-          _.
-            unnamed[String].
-            apply(_ == "-r")
-        }
   }
 
 }

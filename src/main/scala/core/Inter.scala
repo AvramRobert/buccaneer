@@ -27,6 +27,7 @@ object :~ {
 }
 
 // TODO: Isn't there a simpler algebra for representing the same idea?
+// I could basically achieve the same behaviour by using a simple binary tree
 sealed trait Inter[+A] {
   def affix[AA >: A](inter: Inter[AA]): Inter[AA] = this match {
     case Acc(p, r) => Acc(p, r affix inter)
@@ -86,12 +87,28 @@ sealed trait Inter[+A] {
     case Nil => End
   }
 
+  def exists(p: A => Boolean): Boolean = foldLeft(false) { (l, a) => p(a) || l }
+
+  def startsAs(p: A => Boolean): Boolean = this match {
+    case h :~ _ => p(h)
+    case _ => false
+  }
+
   def filterL(p: A => Boolean): List[A] = foldLeft(List.empty[A]) { (l, a) =>
-    if (p(a)) l.+:(a)
+    if (p(a)) a :: l
     else l
   }.reverse
 
   def depth: Int = foldLeft(0)((i, _) => i + 1)
+
+  def head: A = this match {
+    case h :~ _ => h
+  }
+
+  def headOption: Option[A] = this match {
+    case h :~ _ => Some(h)
+    case _ => None
+  }
 }
 
 case class Acc[+A](point: A, rest: Inter[A]) extends Inter[A]

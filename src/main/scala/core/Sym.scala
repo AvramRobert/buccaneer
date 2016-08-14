@@ -19,11 +19,24 @@ case class Docs(description: String, errorMessage: String) {
   def mapErr(f: String => String): Docs = fold(identity)(f)
   def fold(desc: String => String)(err: String => String): Docs = Docs(desc(description), err(errorMessage))
 }
-
-// TODO: Each symbol should have some `Docs` element
 sealed trait Sym {
   def isTyped: Boolean = this match {
     case Type(_) | Assign(_, _, _) => true
+    case _ => false
+  }
+
+  def isNamed: Boolean = this match {
+    case Named(l, d) => true
+    case _ => false
+  }
+
+  def isAssigned: Boolean = this match {
+    case Assign(l, op, d) => true
+    case _ => false
+  }
+
+  def isCommand: Boolean = this match {
+    case Com(l, d) => true
     case _ => false
   }
 

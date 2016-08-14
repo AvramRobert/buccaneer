@@ -1,6 +1,7 @@
 package core
 
 import scala.annotation.implicitNotFound
+import scalaz.Functor
 
 @implicitNotFound(
   "Command widens the type to Any, as the preceding types of ${A} and current returned type are not equal. \n" +
@@ -48,6 +49,7 @@ object Store {
   }
 }
 
+private[core]
 case class Store[M[_], A](private[core] val underlying: M[A]) {
   def keySet(implicit keys: Keys[M, A]) = keys.keySey(underlying)
 

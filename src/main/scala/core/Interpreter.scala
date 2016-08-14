@@ -26,6 +26,11 @@ object Interpreter {
 
   def interpret[A](store: Store[Store.MapT, A]): Step[List[String], A] = resolve(store.keySet) andThen run(store)
 
+  def interpretH[A](store: Store[Store.MapT, A]): Step[List[String], Any] = {
+    val ns = help(store)
+    interpret(ns)
+  }
+
   def interpret[A](runner: Runner[A]): Step[List[String], A] = interpret(Store.empty + runner)
 
   def resolve(keySet: Set[Inter[Sym]]) =
@@ -34,15 +39,29 @@ object Interpreter {
       validate(types) andThen
       narrow
 
+  def help[A](store: Store[Store.MapT, A]): Store[MapT, Any] = {
+    store
+      .keySet
+      .filter(_.startsAs(_.isCommand))
+      .map {
+        _.headOption
+          .fold(Runner(Command.runnerState(_ => ()), Sym.named("", ""))) { com =>
+            val syntax = Inter.lift(com) affix Sym.named("--help", "Help")
+            val f = Command.runnerState[Unit] { _ =>
+              println(Man.buildFor(store.keySet.toList, com))
+            }
+            Runner(f, syntax)
+          }
+      }
+      .foldLeft(Store.widen(store))(_ +> _)
+  }
+
+
   def shape(commands: Set[Inter[Sym]]) = step { (input: List[String]) =>
     input match {
       case l@h :: _ =>
         commands
-          .filter {
-            case Com(a, _) :~ t => a == h
-            case _ => false
-          }
-          .filter(_.depth == l.size)
+          .filter(inter => inter.startsAs(_.isCommand) && inter.depth == l.size)
           .map(_ zipL l)
           .toList
           .successNel
@@ -76,10 +95,15 @@ object Interpreter {
 }
 
 object Validators {
+  //TODO: Should the normalisation be part of the reification process?
   def normalise(syntax: Inter[(Sym, String)]): List[String] = {
-    syntax filterL (_._1 isTyped) map {
-      case ((Assign(l, op, _), input)) => (input split op) (1)
-      case (_, input) => input
+    syntax filterL (_._1 isTyped) match {
+      case list@h :: t =>
+        list.map {
+          case ((Assign(l, op, _), input)) => (input split op) (1)
+          case (_, input) => input
+        }
+      case Nil => List("")
     }
   }
 
