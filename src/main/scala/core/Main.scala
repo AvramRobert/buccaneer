@@ -44,7 +44,15 @@ object Main {
           a + b
         }
 
-    val store = Store.empty + addUnnamed + addNamed + addAssigned
+    val opt = {
+      add
+        .option("a", desc = "Option of for `add`")
+        .apply { _ =>
+          println("YAY")
+        }
+    }
+
+    val store = Store.empty +> addUnnamed +> addNamed +> addAssigned
 
     val params1 = List("add", "2", "3")
     val params2 = List("add", "a", "2", "b", "3")
@@ -53,9 +61,8 @@ object Main {
     val params5 = List("subtract", "5", "4")
     val params6 = List("add", "--help")
 
+
     println(Interpreter.interpretH(store).run(params6))
-
-
   }
 
 }

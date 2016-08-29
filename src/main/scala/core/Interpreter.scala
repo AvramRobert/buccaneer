@@ -8,6 +8,7 @@ import scalaz.syntax.either._
 import Validators._
 import core.Store.MapT
 import Store._
+import Binary.treeSyntax
 
 //TODO: Can't I generalise this? Or should'nt I generalise this?
 object Interpreter {
@@ -33,7 +34,7 @@ object Interpreter {
 
   def interpret[A](runner: Runner[A]): Step[List[String], A] = interpret(Store.empty + runner)
 
-  def resolve(keySet: Set[Inter[Sym]]) =
+  def resolve(keySet: Set[Tree[Sym]]) =
     shape(keySet) andThen
       validate(syntax) andThen
       validate(types) andThen
@@ -42,11 +43,11 @@ object Interpreter {
   def help[A](store: Store[Store.MapT, A]): Store[MapT, Any] = {
     store
       .keySet
-      .filter(_.startsAs(_.isCommand))
+      .filter(_.rootOf(_.isCommand))
       .map {
-        _.headOption
-          .fold(Runner(Command.runnerState(_ => ()), Sym.named("", ""))) { com =>
-            val syntax = Inter.lift(com) affix Sym.named("--help", "Help")
+        _.rootOption
+          .fold(Runner(Command.runnerState(_ => ()), Binary.liftTree(Sym.named("", "")))) { com =>
+            val syntax = Binary.liftTree(com) affix Sym.named("--help", "Help")
             val f = Command.runnerState[Unit] { _ =>
               println(Man.buildFor(store.keySet.toList, com))
             }
@@ -56,28 +57,23 @@ object Interpreter {
       .foldLeft(Store.widen(store))(_ +> _)
   }
 
-
-  def shape(commands: Set[Inter[Sym]]) = step { (input: List[String]) =>
-    input match {
-      case l@h :: _ =>
-        commands
-          .filter(inter => inter.startsAs(_.isCommand) && inter.depth == l.size)
-          .map(_ zipL l)
-          .toList
-          .successNel
-      case Nil => Nil.successNel
-    }
+  def shape(commands: Set[Tree[Sym]]) = step { (input: List[String]) =>
+    commands
+      .filter(tree => tree.rootOf(_.isCommand) && tree.depth == input.size)
+      .map(_ zipL input)
+      .toList
+      .successNel
   }
 
-  def validate(f: ((Sym, String)) => Throwable \/ (Sym, String)) = step { (is: List[Inter[(Sym, String)]]) =>
-    lazy val point = List.empty[Inter[(Sym, String)]].successNel[Throwable]
+  def validate(f: ((Sym, String)) => Throwable \/ (Sym, String)) = step { (is: List[Tree[(Sym, String)]]) =>
+    lazy val point = List.empty[Tree[(Sym, String)]].successNel[Throwable]
     is
-      .map(Inter.validate(_)(f))
+      .map(_ validate f)
       .filter(_.isSuccess)
       .foldRight(point)((a, b) => (a |@| b) (_ :: _))
   }
 
-  def narrow = step { (rem: List[Inter[(Sym, String)]]) =>
+  def narrow = step { (rem: List[Tree[(Sym, String)]]) =>
     rem match {
       case h :: Nil => h.successNel
       case h :: t => new Throwable("Ambiguous command. Too many commands match the input").failureNel
@@ -85,7 +81,7 @@ object Interpreter {
     }
   }
 
-  def run[A](m: Store[MapT, A]) = step { (command: Inter[(Sym, String)]) =>
+  def run[A](m: Store[MapT, A]) = step { (command: Tree[(Sym, String)]) =>
     val key = command map (_._1)
     m.get(key)
       .fold(new Throwable("Unknown command").failureNel[A]) { runner =>
@@ -96,7 +92,7 @@ object Interpreter {
 
 object Validators {
   //TODO: Should the normalisation be part of the reification process?
-  def normalise(syntax: Inter[(Sym, String)]): List[String] = {
+  def normalise(syntax: Tree[(Sym, String)]): List[String] = {
     syntax filterL (_._1 isTyped) match {
       case list@h :: t =>
         list.map {
@@ -117,6 +113,9 @@ object Validators {
     case Assign(label, op, _) =>
       if (assoc._2 startsWith (label + op)) assoc.right
       else new Throwable(s"Improper assignment for `$label`").left
+    case Alt(th, tht, _) =>
+      if (assoc._2 == th || assoc._2 == tht) assoc.right
+      else new Throwable(s"None of the provided alternatives $th or $tht match input of ${assoc._2}").left
     case _ => assoc.right
   }
 

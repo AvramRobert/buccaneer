@@ -1,6 +1,7 @@
 package core
 
 import core.Texer.Text
+import Binary.treeSyntax
 
 object Man {
 
@@ -69,7 +70,7 @@ object Man {
 
   val spacing = 1
   val colIndent = 7
-  val colAlign = 8
+  val colAlign = 10
   val lineSpace = 1
 
   def liftString(text: String): Text[String] = (text split " " toList) map instance.lift
@@ -87,21 +88,23 @@ object Man {
 
   def simpleRow(items: Text[String]*): Text[String] = row(items: _*)(identity)
 
-  def options(all: List[Inter[Sym]]): Text[String] = {
+  def options(all: List[Tree[Sym]]): Text[String] = {
     all.flatMap {
       _
-        .filterL(com => com.isNamed || com.isAssigned)
+        .filterL(com => com.isNamed || com.isAssigned || com.isAlt)
         .flatMap {
           case Named(l, d) => simpleRow(liftString(l), liftString(d.description)).line
           case Assign(l, op, d) => simpleRow(liftString(l), liftString(d.description)).line
+          case Alt(ths, tht, d) => simpleRow(liftString(s"$ths, $tht"), liftString(d.description)).line
           case _ => Nil
         }
     }
   }
 
-  def cmd(all: List[Inter[Sym]]): Text[String] = {
+  def cmd(all: List[Tree[Sym]]): Text[String] = {
     all
-      .map(_.head)
+      .filter(_.rootOf(_.isCommand))
+      .map(_.rootOption.get)
       .distinct
       .map {
         case Com(a, d) => liftString(a)
@@ -110,27 +113,29 @@ object Man {
       .head
   }
 
-  def synopsis(all: List[Inter[Sym]]): Text[String] = {
+  def synopsis(all: List[Tree[Sym]]): Text[String] = {
     val init = cmd(all)
     val sentinel = init map (_ => tex.blank)
     val sentients = init :: (0 until (all.size - 1)).map(_ => sentinel).toList
     (sentients zip all) flatMap {
-      case (sent, inter) =>
+      case (sent, tree) =>
         row(sent,
-          inter.foldLeft(List.empty[Token[String]]) {
+          tree.foldLeft(List.empty[Token[String]]) {
             case (lst, Com(l, _)) => lst
             case (lst, Named(l, _)) => lst append liftString(l)
             case (lst, Assign(l, op, _)) => lst append liftString(s"$l$op<param>")
             case (lst, Type(_)) => lst append liftString("<param>")
+            case (lst, _) => lst
           })(_
           .prepend(liftString("["))
           .append(liftString("]")))
     }
   }
 
-  def name(all: List[Inter[Sym]]): Text[String] = {
+  def name(all: List[Tree[Sym]]): Text[String] = {
     all
-      .map(_.head)
+      .filter(_.rootOf(_.isCommand))
+      .map(_.rootOption.get)
       .distinct
       .flatMap {
         case Com(a, d) => (liftString(a) append liftString(s" - ${d.description}").spacing(spacing)).indent(colIndent)
@@ -141,7 +146,7 @@ object Man {
 
   def title(s: String): Text[String] = liftString(s).hspace(lineSpace)
 
-  def build(all: List[Inter[Sym]]): String =
+  def build(all: List[Tree[Sym]]): String =
     title("NAME")
       .append(name(all))
       .hspace(lineSpace)
@@ -154,14 +159,7 @@ object Man {
       .append(options(all))
       .make
 
-  def buildFor(all: List[Inter[Sym]], com: Sym): String = {
-    build(all.filter {
-      _.exists {
-        case c@Com(l, d) => c == com
-        case _ => false
-      }
-    })
-  }
+  def buildFor(all: List[Tree[Sym]], com: Sym): String = build(all.filter(_.rootOf(_ == com)))
 
 }
 

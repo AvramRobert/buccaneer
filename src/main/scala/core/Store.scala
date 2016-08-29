@@ -1,7 +1,6 @@
 package core
 
 import scala.annotation.implicitNotFound
-import scalaz.Functor
 
 @implicitNotFound(
   "Command widens the type to Any, as the preceding types of ${A} and current returned type are not equal. \n" +
@@ -18,18 +17,18 @@ sealed trait Add[M[_], A] {
 
 private[core]
 sealed trait Get[M[_], A] {
-  def get(m: M[A])(key: Inter[Sym]): Option[Runner[A]]
+  def get(m: M[A])(key: Tree[Sym]): Option[Runner[A]]
 }
 
 private[core]
 sealed trait Keys[M[_], A] {
-  def keySey(m: M[A]): Set[Inter[Sym]]
+  def keySey(m: M[A]): Set[Tree[Sym]]
 }
 // TODO: Abstract this further?
 object Store {
-  type MapT[A] = Map[Inter[Sym], Runner[A]]
+  type MapT[A] = Map[Tree[Sym], Runner[A]]
 
-  def empty[A] = Store[MapT, A](Map.empty[Inter[Sym], Runner[A]])
+  def empty[A] = Store[MapT, A](Map.empty[Tree[Sym], Runner[A]])
   def widen[A](store: Store[MapT, A]): Store[MapT, Any] = store.underlying.foldLeft(empty[Any])((a, b) => a +> b._2)
 
   implicit def addTC[A]: Add[MapT, A] = new Add[MapT, A] {
@@ -41,11 +40,11 @@ object Store {
   }
 
   implicit def getTC[A]: Get[MapT, A] = new Get[MapT, A] {
-    override def get(m: MapT[A])(key: Inter[Sym]): Option[Runner[A]] = m get key
+    override def get(m: MapT[A])(key: Tree[Sym]): Option[Runner[A]] = m get key
   }
 
   implicit def keysTC[A]: Keys[MapT, A] = new Keys[MapT, A] {
-    override def keySey(m: MapT[A]): Set[Inter[Sym]] = m.keySet
+    override def keySey(m: MapT[A]): Set[Tree[Sym]] = m.keySet
   }
 }
 
@@ -57,5 +56,5 @@ case class Store[M[_], A](private[core] val underlying: M[A]) {
 
   def +>[B](r: Runner[B])(implicit plusW: AddW[M, A]) = Store(plusW.add(underlying)(r))
 
-  def get(key: Inter[Sym])(implicit read: Get[M, A]): Option[Runner[A]] = read.get(underlying)(key)
+  def get(key: Tree[Sym])(implicit read: Get[M, A]): Option[Runner[A]] = read.get(underlying)(key)
 }
