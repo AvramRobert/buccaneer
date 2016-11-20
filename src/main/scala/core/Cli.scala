@@ -15,7 +15,7 @@ object Cli {
 
   def rebase(u: UntypedCli): Cmd0 => UntypedCli = UntypedCli(_, u.store)
 
-  def cmd: ((String, String)) => Cmd0 = t => Command(t._1, t._2)
+  def cmd: ((String, String)) => Cmd0 = t => Command(t._1)
 }
 
 sealed trait Cli[A] {

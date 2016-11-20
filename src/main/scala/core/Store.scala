@@ -17,18 +17,18 @@ sealed trait Add[M[_], A] {
 
 private[core]
 sealed trait Get[M[_], A] {
-  def get(m: M[A])(key: Tree[Sym]): Option[Cmd[A]]
+  def get(m: M[A])(key: Tree[Denot]): Option[Cmd[A]]
 }
 
 private[core]
 sealed trait Keys[M[_], A] {
-  def keySey(m: M[A]): Set[Tree[Sym]]
+  def keySey(m: M[A]): Set[Tree[Denot]]
 }
 // TODO: Abstract this further?
 object Store {
-  type MapT[A] = Map[Tree[Sym], Cmd[A]]
+  type MapT[A] = Map[Tree[Denot], Cmd[A]]
 
-  def empty[A] = Store[MapT, A](Map.empty[Tree[Sym], Cmd[A]])
+  def empty[A] = Store[MapT, A](Map.empty[Tree[Denot], Cmd[A]])
   def widen[A](store: Store[MapT, A]): Store[MapT, Any] = store.underlying.foldLeft(empty[Any])((a, b) => a +> b._2)
 
   implicit def addTC[A]: Add[MapT, A] = new Add[MapT, A] {
@@ -40,11 +40,11 @@ object Store {
   }
 
   implicit def getTC[A]: Get[MapT, A] = new Get[MapT, A] {
-    override def get(m: MapT[A])(key: Tree[Sym]): Option[Cmd[A]] = m get key
+    override def get(m: MapT[A])(key: Tree[Denot]): Option[Cmd[A]] = m get key
   }
 
   implicit def keysTC[A]: Keys[MapT, A] = new Keys[MapT, A] {
-    override def keySey(m: MapT[A]): Set[Tree[Sym]] = m.keySet
+    override def keySey(m: MapT[A]): Set[Tree[Denot]] = m.keySet
   }
 }
 
@@ -56,5 +56,5 @@ case class Store[M[_], A](private[core] val underlying: M[A]) {
 
   def +>[B](r: Cmd[B])(implicit plusW: AddW[M, A]) = Store(plusW.add(underlying)(r))
 
-  def get(key: Tree[Sym])(implicit read: Get[M, A]): Option[Cmd[A]] = read.get(underlying)(key)
+  def get(key: Tree[Denot])(implicit read: Get[M, A]): Option[Cmd[A]] = read.get(underlying)(key)
 }

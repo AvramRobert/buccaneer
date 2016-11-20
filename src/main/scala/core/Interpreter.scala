@@ -1,7 +1,5 @@
 package core
 
-import scala.util.{Failure, Success, Try}
-import scalaz.syntax.applicative._
 import scalaz.syntax.validation._
 import scalaz.{Bind, Kleisli, ValidationNel, \/}
 import scalaz.syntax.either._
@@ -9,6 +7,7 @@ import Validators._
 import core.Store.MapT
 import Store._
 import Binary.treeSyntax
+import scalaz.syntax.applicative._
 
 //TODO: Can't I generalise this? Or should'nt I generalise this?
 object Interpreter {
@@ -27,53 +26,62 @@ object Interpreter {
 
   def interpret[A](store: Store[Store.MapT, A]): Step[List[String], A] = resolve(store.keySet) andThen run(store)
 
-//  def interpretH[A](store: Store[Store.MapT, A]): Step[List[String], Any] = {
-//    val ns = help(store)
-//    interpret(ns)
-//  }
+  //  def interpretH[A](store: Store[Store.MapT, A]): Step[List[String], Any] = {
+  //    val ns = help(store)
+  //    interpret(ns)
+  //  }
 
   def interpret[A](runner: Cmd[A]): Step[List[String], A] = interpret(Store.empty + runner)
 
-  def resolve(keySet: Set[Tree[Sym]]) =
+  def interpret2[A](command: Cmd[A]): Step[List[String], A] = step { list =>
+    val x = command.syntax zipL list
+    (x.validate(syntax) |@| x.validate(types) |@| command.run(list)) {
+      (_, _, a) => a
+    }
+  }
+
+  def resolve(keySet: Set[Tree[Denot]]) =
     shape(keySet) andThen
       validate(syntax) andThen
       validate(types) andThen
       narrow
 
-//  def help[A](store: Store[Store.MapT, A]): Store[MapT, Any] = {
-//    store
-//      .keySet
-//      .filter(_.rootOf(_.isCommand))
-//      .map {
-//        _.rootOption
-//          .fold(Runner(Command.runnerState(_ => ()), Binary.lift(Sym.named("", "")))) { com =>
-//            val syntax = Binary.lift(com) affix Sym.named("--help", "Help")
-//            val f = Command.runnerState[Unit] { _ =>
-//              println(Man.buildFor(store.keySet.toList, com))
-//            }
-//            Runner(f, syntax)
-//          }
-//      }
-//      .foldLeft(Store.widen(store))(_ +> _)
-//  }
+  //  def help[A](store: Store[Store.MapT, A]): Store[MapT, Any] = {
+  //    store
+  //      .keySet
+  //      .filter(_.rootOf(_.isCommand))
+  //      .map {
+  //        _.rootOption
+  //          .fold(Runner(Command.runnerState(_ => ()), Binary.lift(Sym.named("", "")))) { com =>
+  //            val syntax = Binary.lift(com) affix Sym.named("--help", "Help")
+  //            val f = Command.runnerState[Unit] { _ =>
+  //              println(Man.buildFor(store.keySet.toList, com))
+  //            }
+  //            Runner(f, syntax)
+  //          }
+  //      }
+  //      .foldLeft(Store.widen(store))(_ +> _)
+  //  }
 
-  def shape(commands: Set[Tree[Sym]]) = step { (input: List[String]) =>
+  def shape(commands: Set[Tree[Denot]]) = step { (input: List[String]) =>
     commands
-      .filter(tree => tree.rootOf(_.isCommand) && tree.depth == input.size)
+      .filter {
+        case tree @ Identifier(Label(value)) -< (l, r) => (value == input.head) && tree.depth == input.size
+      }
       .map(_ zipL input)
       .toList
       .successNel
   }
 
-  def validate(f: ((Sym, String)) => Throwable \/ (Sym, String)) = step { (is: List[Tree[(Sym, String)]]) =>
-    lazy val point = List.empty[Tree[(Sym, String)]].successNel[Throwable]
+  def validate(f: ((Denot, String)) => Throwable \/ (Denot, String)) = step { (is: List[Tree[(Denot, String)]]) =>
+    lazy val point = List.empty[Tree[(Denot, String)]].successNel[Throwable]
     is
       .map(_ validate f)
       .filter(_.isSuccess)
       .foldRight(point)((a, b) => (a |@| b) (_ :: _))
   }
 
-  def narrow = step { (rem: List[Tree[(Sym, String)]]) =>
+  def narrow = step { (rem: List[Tree[(Denot, String)]]) =>
     rem match {
       case h :: Nil => h.successNel
       case h :: t => new Throwable("Ambiguous command. Too many commands match the input").failureNel
@@ -81,50 +89,37 @@ object Interpreter {
     }
   }
 
-  def run[A](m: Store[MapT, A]) = step { (command: Tree[(Sym, String)]) =>
-    val key = command map (_._1)
+  def run[A](m: Store[MapT, A]) = step { (syntax: Tree[(Denot, String)]) =>
+    val key = syntax map (_._1)
     m.get(key)
-      .fold(new Throwable("Unknown command").failureNel[A]) { cmd =>
-        (normalise _ andThen cmd.run) (command)
+      .fold(new Throwable("Unknown command").failureNel[A]) { command =>
+        command.run(syntax filterL (_._1.isTyped) map (_._2))
       }
   }
 }
 
 object Validators {
-  //TODO: Should the normalisation be part of the reification process?
-  def normalise(syntax: Tree[(Sym, String)]): List[String] = {
-    syntax filterL (_._1 isTyped) match {
-      case list@h :: t =>
-        list.map {
-          case ((Assign(l, _), input)) => input drop l.length
-          case (_, input) => input
-        }
-      case Nil => List("")
+  def syntax(assoc: (Denot, String)) = assoc._1 match {
+    case Identifier(symbol) => symbol.find(_ == assoc._2) match {
+      case Some(_) => assoc.right
+      case None => new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${symbol.show}").left
     }
-  }
-
-  def syntax(assoc: (Sym, String)) = assoc._1 match {
-    case Com(label, _) =>
-      if (label == assoc._2) assoc.right
-      else new Throwable(s"Input of `${assoc._2}` does not match expected `$label`").left
-    case Named(label, _) =>
-      if (label == assoc._2) assoc.right
-      else new Throwable(s"Input of `${assoc._2}` does not match expected `$label`").left
-    case Assign(label, _) =>
-      if ((assoc._2 startsWith label) && (assoc._2 drop label.length).nonEmpty) assoc.right
-      else new Throwable(s"Improper assignment for `$label`").left
-    case Alt(th, tht, _) =>
-      if (assoc._2 == th || assoc._2 == tht) assoc.right
-      else new Throwable(s"None of the provided alternatives $th or $tht match input of ${assoc._2}").left
+    case TypedIdentifier(symbol, _) => symbol.find(v => assoc._2 startsWith v) match {
+      case Some(_) => assoc.right
+      case None => new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${symbol.show}").left
+    }
     case _ => assoc.right
   }
 
-  def types(assoc: (Sym, String)) = assoc._1 match {
-    case Type(m) =>
-      Try(m(assoc._2)) match {
-        case Success(_) => assoc.right
-        case Failure(_) => new Throwable(s"Could not prove type of `${assoc._2}`").left
-      }
+  def types(assoc: (Denot, String)) = assoc._1 match {
+    case Typing(proof) =>
+      proof(assoc._2)
+        .leftMap(_ => new Throwable(s"Could not prove type of `${assoc._2}`"))
+        .map(_ => assoc)
+    case TypedIdentifier(_, proof) =>
+      proof(assoc._2)
+        .leftMap(_ => new Throwable(s"Could not prove type of `${assoc._2}`"))
+        .map(_ => assoc)
     case _ => assoc.right
   }
 }

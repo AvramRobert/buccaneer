@@ -1,70 +1,44 @@
 package core
 
+import scala.annotation.tailrec
+
 object Sym {
-  def alt(label: String, desc: String): Sym = Alt("-" + label, "--" + label).mapMsg(_ => desc)
-
-  def command(label: String, desc: String): Sym = Com(label).mapMsg(_ => desc)
-
-  def named(label: String, desc: String): Sym = Named(label).mapMsg(_ => desc)
-
-  def typed[A](implicit m: Reified[A]): Sym = Type[A](m)
-
-  def assign(label: String, desc: String): Sym = Assign(label).mapMsg(_ => desc)
+  implicit def conversion(s: String): Sym = Label(s)
 }
 
-object Docs {
-  def empty: Docs = Docs("", "")
-}
-
-case class Docs(description: String, errorMessage: String) {
-  def mapMsg(f: String => String): Docs = fold(f)(identity)
-  def mapErr(f: String => String): Docs = fold(identity)(f)
-  def fold(desc: String => String)(err: String => String): Docs = Docs(desc(description), err(errorMessage))
-}
-
-//Currently, a `Com` is syntactically equivalent to a `Named`. Semantically they differ only slightly.
-//The differentiation is to ease its specificity. In this regard, either change `Com`s semantics to better
-//identify it within this algebra, or remove it all together and use `Named` instead.
 sealed trait Sym {
-  def isTyped: Boolean = this match {
-    case Type(_) | Assign(_, _) => true
-    case _ => false
+  def | (that: String): Alternative = this match {
+    case Label(v) => Alternative(v, Label(that))
+    case Alternative(v, alt) => Alternative(v, alt | that)
   }
 
-  def isNamed: Boolean = this match {
-    case Named(_, _) => true
-    case _ => false
+  @tailrec final def find(p: String => Boolean): Option[Label] = this match {
+    case x@Label(value) if p(value) => Some(x)
+    case Alternative(value, _) if p(value) => Some(Label(value))
+    case Alternative(_, symbol) => symbol find p
+    case _ => None
   }
 
-  def isAssigned: Boolean = this match {
-    case Assign(_, _) => true
-    case _ => false
+  def show: String = this match {
+    case Label(value) => value
+    case Alternative(value, symbol) => s"$value | ${symbol.show} "
   }
-
-  def isCommand: Boolean = this match {
-    case Com(_, _) => true
-    case _ => false
-  }
-
-  def isAlt: Boolean = this match {
-    case Alt(_, _, _) => true
-    case _ => false
-  }
-
-  def foldDocs(desc: String => String)(err: String => String): Sym = this match {
-    case Com(l, dcs) => Com(l, dcs.fold(desc)(err))
-    case Named(l, dcs) => Named(l, dcs.fold(desc)(err))
-    case Assign(l, dcs) => Assign(l, dcs.fold(desc)(err))
-    case Alt(ths, tht, dcs) => Alt(ths, tht, dcs.fold(desc)(err))
-    case _ => this
-  }
-
-  def mapMsg(f: String => String): Sym = foldDocs(f)(identity)
-  def mapErr(f: String => String): Sym = foldDocs(identity)(f)
-
 }
-case class Com(label: String, docs: Docs = Docs.empty) extends Sym
-case class Named(label: String, docs: Docs = Docs.empty) extends Sym
-case class Assign(label: String, docs: Docs = Docs.empty) extends Sym
-case class Type[A](proof: Reified[A]) extends Sym
-case class Alt(ths: String, tht: String, docs: Docs = Docs.empty) extends Sym
+case class Label(value: String) extends Sym
+case class Alternative(value: String, alt: Sym) extends Sym
+
+object Denot {
+  def id(symbol: Sym): Identifier = Identifier(symbol)
+  def typing[A](proof: Reified[A]): Typing[A] = Typing(proof)
+  def typedId[A](symbol: Sym, proof: Reified[A]): TypedIdentifier[A] = TypedIdentifier(symbol, proof)
+}
+
+sealed trait Denot {
+  def isTyped: Boolean = this match {
+    case Typing(_) | TypedIdentifier(_, _) => true
+    case _ => false
+  }
+}
+case class Identifier(symbol: Sym) extends Denot
+case class Typing[A](proof: Reified[A]) extends Denot
+case class TypedIdentifier[A](symbol: Sym, proof: Reified[A]) extends Denot

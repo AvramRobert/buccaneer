@@ -65,15 +65,6 @@ object Binary {
     traverse[λ, A, A](t)(valid)
   }
 
-  def validate2[A](t: List[A])(f: A => Throwable \/ A): ValidationNel[Throwable, List[A]] = {
-    import scalaz.syntax.traverse._
-    import scalaz.std.list._
-    type λ[x] = ValidationNel[Throwable, x]
-    def valid(a: A): λ[A] = f(a).validation.toValidationNel
-
-    t.traverse[λ, A](valid)
-  }
-
   def depth[A](t: Tree[A]): Int = foldl(t, 0)((i, _) => i + 1)
 
   implicit def treeSyntax[A](t: Tree[A]): TreeSyntax[A] = TreeSyntax(t)
