@@ -94,7 +94,7 @@ object Man {
         .filterL(com => com.isNamed || com.isAssigned || com.isAlt)
         .flatMap {
           case Named(l, d) => simpleRow(liftString(l), liftString(d.description)).line
-          case Assign(l, op, d) => simpleRow(liftString(l), liftString(d.description)).line
+          case Assign(l, d) => simpleRow(liftString(l), liftString(d.description)).line
           case Alt(ths, tht, d) => simpleRow(liftString(s"$ths, $tht"), liftString(d.description)).line
           case _ => Nil
         }
@@ -123,7 +123,7 @@ object Man {
           tree.foldLeft(List.empty[Token[String]]) {
             case (lst, Com(l, _)) => lst
             case (lst, Named(l, _)) => lst append liftString(l)
-            case (lst, Assign(l, op, _)) => lst append liftString(s"$l$op<param>")
+            case (lst, Assign(l, _)) => lst append liftString(s"$l<param>")
             case (lst, Type(_)) => lst append liftString("<param>")
             case (lst, _) => lst
           })(_

@@ -4,6 +4,9 @@ Compile time command arity check. Commands that are similar enough to pass the s
 `Reified` is in itself a proof, that the input `String` is of, or can be converted to the given type. I might perhaps be able to use this
 as an eager type check to further narrow down the command to be run.
 
+2.
+Because my representation is now a tree, can't I use a huffman tree to encode these trees as binary patterns and use them as keys for my store and
+subsequent pattern matching?
 
 === Experiments ===
 1.
@@ -17,4 +20,18 @@ sbt-bolierplate for hlist => functionN conversion. See Command.
 4. Refactor and separate user interface from implementation details
 5. Tests and laws
 6. Documentation
+
+
+==============================
+Redesign:
+
+The main problem with this is, that it has too many individual parts that only work well together.
+In essence, Tree[Sym] is essentially the thing with which command structures are defined. Tree is
+still, in my opinion, a good idea. The way it structures information is very explicit.
+The problem is the traversal of commands. I define a traversal in terms of the type of `Sym` in Tree.
+This I don't like. I could surely define something that can make the same structures within a list. For example
+define some algebra, that references left and right associations, such that, even linearly, I should be able to
+derive the appropriate structure. But this would be less robust and readable.
+An additional thing that I don't like, is parsing. Parsing, in my case, is there to determine the exact command that should
+be run, but also to derive the parameters for the functions associated with each command.
 

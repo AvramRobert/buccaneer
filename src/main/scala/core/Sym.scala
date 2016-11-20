@@ -9,7 +9,7 @@ object Sym {
 
   def typed[A](implicit m: Reified[A]): Sym = Type[A](m)
 
-  def assign(label: String, operator: String, desc: String): Sym = Assign(label, operator).mapMsg(_ => desc)
+  def assign(label: String, desc: String): Sym = Assign(label).mapMsg(_ => desc)
 }
 
 object Docs {
@@ -27,7 +27,7 @@ case class Docs(description: String, errorMessage: String) {
 //identify it within this algebra, or remove it all together and use `Named` instead.
 sealed trait Sym {
   def isTyped: Boolean = this match {
-    case Type(_) | Assign(_, _, _) => true
+    case Type(_) | Assign(_, _) => true
     case _ => false
   }
 
@@ -37,7 +37,7 @@ sealed trait Sym {
   }
 
   def isAssigned: Boolean = this match {
-    case Assign(_, _, _) => true
+    case Assign(_, _) => true
     case _ => false
   }
 
@@ -54,7 +54,7 @@ sealed trait Sym {
   def foldDocs(desc: String => String)(err: String => String): Sym = this match {
     case Com(l, dcs) => Com(l, dcs.fold(desc)(err))
     case Named(l, dcs) => Named(l, dcs.fold(desc)(err))
-    case Assign(l, op, dcs) => Assign(l, op, dcs.fold(desc)(err))
+    case Assign(l, dcs) => Assign(l, dcs.fold(desc)(err))
     case Alt(ths, tht, dcs) => Alt(ths, tht, dcs.fold(desc)(err))
     case _ => this
   }
@@ -65,6 +65,6 @@ sealed trait Sym {
 }
 case class Com(label: String, docs: Docs = Docs.empty) extends Sym
 case class Named(label: String, docs: Docs = Docs.empty) extends Sym
-case class Assign(label: String, operator: String, docs: Docs = Docs.empty) extends Sym
+case class Assign(label: String, docs: Docs = Docs.empty) extends Sym
 case class Type[A](proof: Reified[A]) extends Sym
 case class Alt(ths: String, tht: String, docs: Docs = Docs.empty) extends Sym

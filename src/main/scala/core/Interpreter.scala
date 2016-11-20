@@ -27,12 +27,12 @@ object Interpreter {
 
   def interpret[A](store: Store[Store.MapT, A]): Step[List[String], A] = resolve(store.keySet) andThen run(store)
 
-  def interpretH[A](store: Store[Store.MapT, A]): Step[List[String], Any] = {
-    val ns = help(store)
-    interpret(ns)
-  }
+//  def interpretH[A](store: Store[Store.MapT, A]): Step[List[String], Any] = {
+//    val ns = help(store)
+//    interpret(ns)
+//  }
 
-  def interpret[A](runner: Runner[A]): Step[List[String], A] = interpret(Store.empty + runner)
+  def interpret[A](runner: Cmd[A]): Step[List[String], A] = interpret(Store.empty + runner)
 
   def resolve(keySet: Set[Tree[Sym]]) =
     shape(keySet) andThen
@@ -40,22 +40,22 @@ object Interpreter {
       validate(types) andThen
       narrow
 
-  def help[A](store: Store[Store.MapT, A]): Store[MapT, Any] = {
-    store
-      .keySet
-      .filter(_.rootOf(_.isCommand))
-      .map {
-        _.rootOption
-          .fold(Runner(Command.runnerState(_ => ()), Binary.liftTree(Sym.named("", "")))) { com =>
-            val syntax = Binary.liftTree(com) affix Sym.named("--help", "Help")
-            val f = Command.runnerState[Unit] { _ =>
-              println(Man.buildFor(store.keySet.toList, com))
-            }
-            Runner(f, syntax)
-          }
-      }
-      .foldLeft(Store.widen(store))(_ +> _)
-  }
+//  def help[A](store: Store[Store.MapT, A]): Store[MapT, Any] = {
+//    store
+//      .keySet
+//      .filter(_.rootOf(_.isCommand))
+//      .map {
+//        _.rootOption
+//          .fold(Runner(Command.runnerState(_ => ()), Binary.lift(Sym.named("", "")))) { com =>
+//            val syntax = Binary.lift(com) affix Sym.named("--help", "Help")
+//            val f = Command.runnerState[Unit] { _ =>
+//              println(Man.buildFor(store.keySet.toList, com))
+//            }
+//            Runner(f, syntax)
+//          }
+//      }
+//      .foldLeft(Store.widen(store))(_ +> _)
+//  }
 
   def shape(commands: Set[Tree[Sym]]) = step { (input: List[String]) =>
     commands
@@ -84,8 +84,8 @@ object Interpreter {
   def run[A](m: Store[MapT, A]) = step { (command: Tree[(Sym, String)]) =>
     val key = command map (_._1)
     m.get(key)
-      .fold(new Throwable("Unknown command").failureNel[A]) { runner =>
-        (normalise _ andThen runner.run) (command)
+      .fold(new Throwable("Unknown command").failureNel[A]) { cmd =>
+        (normalise _ andThen cmd.run) (command)
       }
   }
 }
@@ -96,7 +96,7 @@ object Validators {
     syntax filterL (_._1 isTyped) match {
       case list@h :: t =>
         list.map {
-          case ((Assign(l, op, _), input)) => (input split op) (1)
+          case ((Assign(l, _), input)) => input drop l.length
           case (_, input) => input
         }
       case Nil => List("")
@@ -110,8 +110,8 @@ object Validators {
     case Named(label, _) =>
       if (label == assoc._2) assoc.right
       else new Throwable(s"Input of `${assoc._2}` does not match expected `$label`").left
-    case Assign(label, op, _) =>
-      if (assoc._2 startsWith (label + op)) assoc.right
+    case Assign(label, _) =>
+      if ((assoc._2 startsWith label) && (assoc._2 drop label.length).nonEmpty) assoc.right
       else new Throwable(s"Improper assignment for `$label`").left
     case Alt(th, tht, _) =>
       if (assoc._2 == th || assoc._2 == tht) assoc.right

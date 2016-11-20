@@ -7,7 +7,7 @@ import scalaz.syntax.applicative._
 // TODO: Test, perhaps next version
 object Binary {
 
-  def liftTree[A](a: A): Tree[A] = Node(a)
+  def lift[A](a: A): Tree[A] = Node(a)
 
   def affix[A](t: Tree[A], nb: Tree[A]): Tree[A] = t match {
     case Node(v, lt, rt) => Node(v, lt, affix(rt, nb))
@@ -98,8 +98,8 @@ case class TreeSyntax[A](t: Tree[A]) {
 
   def infix(nb: Tree[A]): Tree[A] = Binary.infix(t, nb)
 
-  def affix(v: A): Tree[A] = affix(Binary.liftTree(v))
-  def infix(v: A): Tree[A] = infix(Binary.liftTree(v))
+  def affix(v: A): Tree[A] = affix(Binary.lift(v))
+  def infix(v: A): Tree[A] = infix(Binary.lift(v))
 
   def map[B](f: A => B): Tree[B] = Binary.map(t)(f)
 
@@ -121,7 +121,7 @@ case class TreeSyntax[A](t: Tree[A]) {
   def filterL(f: A => Boolean): List[A] = Binary.foldr(t, List.empty[A]) {
     case (a, b) if f(a) => a :: b
     case (_, b) => b
-  }
+  }.reverse
 
   def foldLeft[B](b: B)(f: (B, A) => B): B = Binary.foldl(t, b)(f)
 }
