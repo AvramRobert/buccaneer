@@ -28,7 +28,7 @@ object Binary {
   }
 
   def traverse[G[_], A, B](t: Tree[A])(f: A => G[B])(implicit ap: Applicative[G]): G[Tree[B]] = t match {
-    case Node(v, lt, rt) => (f(v) |@| traverse(lt)(f) |@| traverse(rt)(f))(Node.apply)
+    case Node(v, lt, rt) => (f(v) |@| traverse(lt)(f) |@| traverse(rt)(f)) (Node.apply)
     case Leaf => ap point Leaf
   }
 
@@ -39,6 +39,7 @@ object Binary {
   }
 
   def foldl[A, B](t: Tree[A], b: B)(f: (B, A) => B): B = tailFold(t :: Nil, b)(f)
+
   def foldr[A, B](t: Tree[A], b: B)(f: (A, B) => B): B = tailFold(t :: Nil, b)((l, r) => f(r, l))
 
   def zipToList[A, B](tree: Tree[A], list: List[B]): List[(A, B)] = foldl(tree, (List.empty[(A, B)], list)) {
@@ -64,6 +65,15 @@ object Binary {
 
   def depth[A](t: Tree[A]): Int = foldl(t, 0)((i, _) => i + 1)
 
+  def foreach[A](t: Tree[A])(f: A => Unit): Unit = foldl(t, ()) { (_, x) => f(x) }
+
+  def mapLast[A, B](t: Tree[A])(f: A => A): Tree[A] = t match {
+    case Node(v, Leaf, Leaf) => Node(f(v), Leaf, Leaf)
+    case Node(v, left, Leaf) => Node(v, mapLast(left)(f), Leaf)
+    case Node(v, left, right) => Node(v, left, mapLast(right)(f))
+    case Leaf => Leaf
+  }
+
   implicit def treeSyntax[A](t: Tree[A]): TreeSyntax[A] = TreeSyntax(t)
 }
 
@@ -87,9 +97,12 @@ case class TreeSyntax[A](t: Tree[A]) {
   def infix(nb: Tree[A]): Tree[A] = Binary.infix(t, nb)
 
   def affix(v: A): Tree[A] = affix(Binary.lift(v))
+
   def infix(v: A): Tree[A] = infix(Binary.lift(v))
 
   def map[B](f: A => B): Tree[B] = Binary.map(t)(f)
+
+  def foreach(f: A => Unit): Unit = Binary.foreach(t)(f)
 
   def rootOf(p: A => Boolean): Boolean = Binary.rootOf(t)(p)
 
@@ -112,4 +125,6 @@ case class TreeSyntax[A](t: Tree[A]) {
   }.reverse
 
   def foldLeft[B](b: B)(f: (B, A) => B): B = Binary.foldl(t, b)(f)
+
+  def mapLast(f: A => A): Tree[A] = Binary.mapLast(t)(f)
 }

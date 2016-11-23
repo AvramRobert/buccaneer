@@ -6,19 +6,19 @@ import Store._
 object Main {
   def main(args: Array[String]) = {
 
-    val add = Command("add")
+    val add = Command("add").msg("Add command")
     val shift = Command("shift")
 
     val addUnnamed =
       add
-        .argument[Int]
-        .argument[Int]
+        .argument[Int].msg("First argument")
+        .argument[Int].msg("Second argument")
         .apply(_ + _)
 
     val addNamed =
       add
-        .option("a").argument[Int]
-        .option("b").argument[Int]
+        .option("a").msg("Argument \"a\"").argument[Int]
+        .option("b").msg("Argument \"b\"").argument[Int]
         .apply(_ + _)
 
     val addAssigned =
@@ -49,7 +49,8 @@ object Main {
     val params4 = List("shift", "a", "1")
     val params5 = List("shift", "-a")
 
+
     //val params6 = List("add", "--help")
-    println(Interpreter.interpret(store).run(params4))
+    //println(Interpreter.interpret(store).run(params4))
   }
 }

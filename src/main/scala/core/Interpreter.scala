@@ -52,7 +52,7 @@ object Interpreter {
 
   def fit(commands: Set[Tree[Denot]]) = step { (input: List[String]) =>
     commands.filter {
-      case tree@Identifier(Label(value)) -< (_, _) => (value == input.head) && tree.depth == input.size
+      case tree@Identifier(Label(value), _) -< (_, _) => (value == input.head) && tree.depth == input.size
     }
       .map(_ zipL input)
       .toList
@@ -88,11 +88,11 @@ object Interpreter {
 
 object Validators {
   def syntax(assoc: (Denot, String)) = assoc._1 match {
-    case Identifier(symbol) => symbol.find(_ == assoc._2) match {
+    case Identifier(symbol, _) => symbol.find(_ == assoc._2) match {
       case Some(_) => assoc.successNel
       case None => new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${symbol.show}").failureNel
     }
-    case TypedIdentifier(symbol, _) => symbol.find(v => assoc._2 startsWith v) match {
+    case TypedIdentifier(symbol, _, _) => symbol.find(v => assoc._2 startsWith v) match {
       case Some(_) => assoc.successNel
       case None => new Throwable(s"Prefix of `${assoc._2}` does not match the expected prefix of ${symbol.show}<value>").failureNel
     }
@@ -100,8 +100,8 @@ object Validators {
   }
 
   def types(assoc: (Denot, String)) = assoc._1 match {
-    case Typing(proof) => proof(assoc._2).map(_ => assoc)
-    case TypedIdentifier(_, proof) => proof(assoc._2).map(_ => assoc)
+    case Typing(proof, _) => proof(assoc._2).map(_ => assoc)
+    case TypedIdentifier(_, proof, _) => proof(assoc._2).map(_ => assoc)
     case _ => assoc.successNel
   }
 }
