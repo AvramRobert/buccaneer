@@ -37,8 +37,8 @@ object Main {
 
     val shiftOpt =
       shift
-      .option("-a" | "--a")
-      .apply(() => println("HA"))
+        .option("-a" | "--a")
+        .apply(() => println("HA"))
 
 
     val store = Store.empty +> addUnnamed +> addNamed +> addAssigned +> shiftArgs +> shiftOpt
@@ -48,7 +48,8 @@ object Main {
     val params3 = List("add", "a=2", "b=3")
     val params4 = List("shift", "a", "1")
     val params5 = List("shift", "-a")
+
     //val params6 = List("add", "--help")
-    //println(Interpreter.interpret(store).run(params4))
+    println(Interpreter.interpret(store).run(params4))
   }
 }

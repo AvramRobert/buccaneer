@@ -3,32 +3,29 @@ package core
 import core.Command._
 import scalaz.{State, _}
 import Binary.treeSyntax
-import scalaz.syntax.either._
 import scala.language.reflectiveCalls
 import Denot._
+import Reified._
+import scalaz.syntax.validation._
 
 object Command {
-
-  // TODO: If I want concrete enumeration of each failed coercion, then `Reified` should return a `ValidationNel`, not an `\/`
-  type Result[A] = ValidationNel[Throwable, A]
   type TypedC[A] = IndexedState[List[String], List[String], Result[A]]
-
   def apply(label: String): Cmd0 = new Cmd0(Binary.lift(id(label)))
 }
 
 // TODO: Can't I abstract over arity using an HList and sbt-boilerplate for this: https://github.com/sbt/sbt-boilerplate?
 sealed trait CmdBld[+A] {
-  protected def coerce[B](f: String => Throwable \/ B): TypedC[B] = coerce(Reified(f))
+  protected def coerce[B](f: String => Result[B]): TypedC[B] = coerce(Reified(f))
 
   protected def coerce[B](proof: Reified[B]): TypedC[B] =
     for {
       types <- State.get[List[String]]
       _ <- State.modify[List[String]] { list =>
-        if(list.isEmpty) list
+        if (list.isEmpty) list
         else list.tail
       }
       currentType = types.headOption getOrElse ""
-    } yield proof(currentType).validation.toValidationNel
+    } yield proof(currentType)
 
   // Caution: Doing the computation within `fa` reverses the order of parameter application when running the Monad
   // I.e given a command.param[Int].param[String] <- List("1", "a"), it will feed `1` and `a` in reverse => first "a" then "1"
@@ -43,7 +40,7 @@ sealed trait CmdBld[+A] {
     override def map[B, C](fa: TypedC[B])(f: B => C): TypedC[C] = fa map (_ map f)
   }
 
-  protected def proof[B](implicit r: Reified[B]) = r
+  protected def proof[B](implicit r: Reified[B]): Reified[B] = r
 
   protected def opt[C[_] <: CmdBld[_], B](label: Sym)(f: Tree[Denot] => C[B]): C[B] = (f compose Binary.lift[Denot] compose id) (label)
 
@@ -67,7 +64,7 @@ final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
   def assignment[A: Reified](label: Sym): Cmd1[A] = assign(label, proof) { (types, syntax) => new Cmd1(types, syntax0 affix syntax) }
 
-  def apply[A](f: () => A): Cmd[A] = new Cmd(coerce(_ => f().right), syntax0)
+  def apply[A](f: () => A): Cmd[A] = new Cmd(coerce(_ => f().successNel), syntax0)
 
   class Cmd1[A](types1: TypedC[A], syntax1: Tree[Denot]) extends CmdBld[A] {
     def option(label: Sym): Cmd1[A] = opt(label) { syntax => new Cmd1(types1, syntax1 affix syntax) }

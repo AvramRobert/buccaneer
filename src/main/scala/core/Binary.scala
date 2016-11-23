@@ -1,10 +1,12 @@
 package core
 
+import core.Reified.Result
+
 import scala.annotation.tailrec
-import scalaz.{Applicative, ValidationNel, \/}
+import scalaz.Applicative
 import scalaz.syntax.applicative._
 
-// TODO: Test, perhaps next version
+// TODO: Test
 object Binary {
 
   def lift[A](a: A): Tree[A] = Node(a)
@@ -58,12 +60,7 @@ object Binary {
     case _ => false
   }
 
-  def validate[A](t: Tree[A])(f: A => Throwable \/ A): ValidationNel[Throwable, Tree[A]] = {
-    type λ[x] = ValidationNel[Throwable, x]
-    def valid(a: A): λ[A] = f(a).validation.toValidationNel
-
-    traverse[λ, A, A](t)(valid)
-  }
+  def validate[A](t: Tree[A])(f: A => Result[A]): Result[Tree[A]] = traverse(t)(f)
 
   def depth[A](t: Tree[A]): Int = foldl(t, 0)((i, _) => i + 1)
 
@@ -102,7 +99,7 @@ case class TreeSyntax[A](t: Tree[A]) {
 
   def zipL[B](list: List[B]): Tree[(A, B)] = Binary.zipL(t, list)
 
-  def validate(f: A => Throwable \/ A): ValidationNel[Throwable, Tree[A]] = Binary.validate(t)(f)
+  def validate(f: A => Result[A]): Result[Tree[A]] = Binary.validate(t)(f)
 
   def rootOption: Option[A] = t match {
     case root -< (_, _) => Some(root)

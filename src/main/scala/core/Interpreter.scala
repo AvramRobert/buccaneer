@@ -1,54 +1,41 @@
 package core
 
 import scalaz.syntax.validation._
-import scalaz.{Bind, Kleisli, ValidationNel, \/}
-import scalaz.syntax.either._
+import scalaz.Kleisli
 import Validators._
 import core.Store.MapT
 import Store._
 import Binary.treeSyntax
+import core.Reified._
 import scalaz.syntax.applicative._
 
 //TODO: Can't I generalise this? Or should'nt I generalise this?
 object Interpreter {
-  type Slight[A] = ValidationNel[Throwable, A]
-  type Step[A, B] = Kleisli[Slight, A, B]
+  type Step[A, B] = Kleisli[Result, A, B]
+  type IAST = Tree[(Denot, String)] // interpolated abstract syntax tree
 
-  implicit val bindSlight: Bind[Slight] = new Bind[Slight] {
-    override def bind[A, B](fa: Slight[A])(f: (A) => Slight[B]): Slight[B] = fa flatMap f
-
-    override def map[A, B](fa: Slight[A])(f: (A) => B): Slight[B] = fa map f
-  }
-
-  def step[A, B](f: A => Slight[B]): Step[A, B] = Kleisli[Slight, A, B](f)
+  def step[A, B](f: A => Result[B]): Step[A, B] = Kleisli[Result, A, B](f)
 
   def interpret[A](cli: Cli[A]): Step[List[String], A] = interpret(cli.store)
 
-  def interpret[A](store: Store[Store.MapT, A]): Step[List[String], A] = resolve(store.keySet) andThen run(store)
+  def interpret[A](store: Store[Store.MapT, A]): Step[List[String], A] = resolve(store.keySet) andThen runFrom(store)
 
-  //  def interpretH[A](store: Store[Store.MapT, A]): Step[List[String], Any] = {
-  //    val ns = help(store)
-  //    interpret(ns)
-  //  }
+  def interpret[A](command: Cmd[A]): Step[List[String], A] = step { input =>
+    val x = command.syntax zipL input
 
-  def interpret[A](runner: Cmd[A]): Step[List[String], A] = interpret(Store.empty + runner)
-
-  def interpret2[A](command: Cmd[A]): Step[List[String], A] = step { list =>
-    val x = command.syntax zipL list
-    (x.validate(syntax) |@| x.validate(types) |@| command.run(list)) {
+    (x.validate(syntax) |@| x.validate(types) |@| run(command, x)) {
       (_, _, a) => a
     }
   }
 
   def resolve(keySet: Set[Tree[Denot]]) =
-    shape(keySet) andThen
+    fit(keySet) andThen
       validate(syntax) andThen
       validate(types) andThen
-      narrow
+      select
 
   //  def help[A](store: Store[Store.MapT, A]): Store[MapT, Any] = {
-  //    store
-  //      .keySet
+  //    store.keySet
   //      .filter(_.rootOf(_.isCommand))
   //      .map {
   //        _.rootOption
@@ -63,64 +50,59 @@ object Interpreter {
   //      .foldLeft(Store.widen(store))(_ +> _)
   //  }
 
-  def shape(commands: Set[Tree[Denot]]) = step { (input: List[String]) =>
-    commands
-      .filter {
-        case tree @ Identifier(Label(value)) -< (l, r) => (value == input.head) && tree.depth == input.size
-      }
+  def fit(commands: Set[Tree[Denot]]) = step { (input: List[String]) =>
+    commands.filter {
+      case tree@Identifier(Label(value)) -< (_, _) => (value == input.head) && tree.depth == input.size
+    }
       .map(_ zipL input)
       .toList
       .successNel
   }
 
-  def validate(f: ((Denot, String)) => Throwable \/ (Denot, String)) = step { (is: List[Tree[(Denot, String)]]) =>
-    lazy val point = List.empty[Tree[(Denot, String)]].successNel[Throwable]
-    is
-      .map(_ validate f)
+  def validate(f: ((Denot, String)) => Result[(Denot, String)]) = step { (is: List[IAST]) =>
+    val point = List.empty[IAST].successNel[Throwable]
+    is.map(_ validate f)
       .filter(_.isSuccess)
       .foldRight(point)((a, b) => (a |@| b) (_ :: _))
   }
 
-  def narrow = step { (rem: List[Tree[(Denot, String)]]) =>
+  def select = step { (rem: List[IAST]) =>
     rem match {
       case h :: Nil => h.successNel
-      case h :: t => new Throwable("Ambiguous command. Too many commands match the input").failureNel
-      case Nil => new Throwable("Input is not a valid command").failureNel
+      case Nil => new Throwable("Could not find any command matching that input").failureNel
+      case _ => new Throwable("Ambiguous input. Too many commands match the input").failureNel
     }
   }
 
-  def run[A](m: Store[MapT, A]) = step { (syntax: Tree[(Denot, String)]) =>
+  def runFrom[A](m: Store[MapT, A]) = step { (syntax: IAST) =>
     val key = syntax map (_._1)
-    m.get(key)
-      .fold(new Throwable("Unknown command").failureNel[A]) { command =>
-        command.run(syntax filterL (_._1.isTyped) map (_._2))
-      }
+    val fail = new Throwable("Unknown command").failureNel[A]
+    m.get(key).fold(fail)(run(_, syntax))
+  }
+
+  def run[A](cmd: Cmd[A], syntax: IAST): Result[A] = {
+    val args = syntax.filterL(_._1.isTyped).map(_._2)
+    cmd.run(args)
   }
 }
 
 object Validators {
   def syntax(assoc: (Denot, String)) = assoc._1 match {
     case Identifier(symbol) => symbol.find(_ == assoc._2) match {
-      case Some(_) => assoc.right
-      case None => new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${symbol.show}").left
+      case Some(_) => assoc.successNel
+      case None => new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${symbol.show}").failureNel
     }
     case TypedIdentifier(symbol, _) => symbol.find(v => assoc._2 startsWith v) match {
-      case Some(_) => assoc.right
-      case None => new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${symbol.show}").left
+      case Some(_) => assoc.successNel
+      case None => new Throwable(s"Prefix of `${assoc._2}` does not match the expected prefix of ${symbol.show}<value>").failureNel
     }
-    case _ => assoc.right
+    case _ => assoc.successNel
   }
 
   def types(assoc: (Denot, String)) = assoc._1 match {
-    case Typing(proof) =>
-      proof(assoc._2)
-        .leftMap(_ => new Throwable(s"Could not prove type of `${assoc._2}`"))
-        .map(_ => assoc)
-    case TypedIdentifier(_, proof) =>
-      proof(assoc._2)
-        .leftMap(_ => new Throwable(s"Could not prove type of `${assoc._2}`"))
-        .map(_ => assoc)
-    case _ => assoc.right
+    case Typing(proof) => proof(assoc._2).map(_ => assoc)
+    case TypedIdentifier(_, proof) => proof(assoc._2).map(_ => assoc)
+    case _ => assoc.successNel
   }
 }
 
