@@ -70,14 +70,12 @@ object Main {
     val y = textFormatter("Well hello Robert")
     val z = textFormatter("askdlksajlskjdlkasjdskdj")
 
-    println(y.ofWidth(5).run.mkString(""))
-//    println(
-//      y.ofWidth(5)
-//        .continuous
-//        .align(z.ofWidth(5).continuous, 1)
-//        .align(x.ofWidth(7).continuous, 4)
-//        .run
-//        .mkString(""))
+    println(
+      y.ofWidth(5)
+        .align(z.ofWidth(5), 1)
+        .align(x.ofWidth(7), 4)
+        .run
+        .mkString(""))
     //val params6 = List("add", "--help")
     //println(Interpreter.interpret(store).run(params4))
   }

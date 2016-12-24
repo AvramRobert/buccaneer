@@ -124,7 +124,7 @@ object Formatter {
     else formatter
   }
 
-  @tailrec def evaluate[A](formatter: Formatter[A]): (Vector[A], Int) = formatter match {
+  @tailrec def evaluate[A: Lexical](formatter: Formatter[A]): (Vector[A], Int) = formatter match {
     case Every(data, f, width) => evaluate(More(data, f, width, 0, All))
     case More(data, f, width, at, All) if at < data.size =>
       val (start, end) = data.splitAt(at)
@@ -135,7 +135,12 @@ object Formatter {
     case More(data, _, width, _, _) => (data, width)
   }
 
-  def evaluate1[A](formatter: Formatter[A]): Vector[A] = evaluate(formatter)._1
+  def evaluateH[A: Lexical](formatter: Formatter[A]): (Vector[A], Int) = {
+    val (data, width) = evaluate(formatter)
+    (hyphenate(data, width), width)
+  }
+
+  def evaluate1[A: Lexical](formatter: Formatter[A]): Vector[A] = evaluate(formatter)._1
 
   def interleave[A: Lexical](f1: Formatter[A], f2: Formatter[A]): Formatter[A] = {
     val (left, lwidth) = f1.evaluate
@@ -166,26 +171,49 @@ object Formatter {
   def align[A: Lexical](f1: Formatter[A], f2: Formatter[A], distance: Int): Formatter[A] = {
     val (nf1, nf2) = normalise(f1, f2)
     val empty = emptyN(nf1.totalLines * distance).ofWidth(distance)
-
-    nf1 interleave empty interleave nf2
+    nf1.coevalH interleave empty interleave nf2.coevalH
   }
 
-  def run[A: Lexical](formatter: Formatter[A]): Vector[A] = evaluate(formatter) match {
+  def run[A: Lexical](formatter: Formatter[A]): Vector[A] = evaluateH(formatter) match {
     case (data, width) => format(data, width)
   }
 
-  def consume[A](v: Vector[A], width: Int)(f: VRead[A]): Vector[A] = f(v.take(width)) ++ v.drop(width)
+  def consume[A: Lexical](v: Vector[A], width: Int)(f: VRead[A]): Vector[A] = f(v.take(width)) ++ v.drop(width)
+
+  /*
+   // Almost works properly.. if however something like the following occurs:
+        Hello my n
+        ame is Robert.
+
+        That becomes this:
+
+        Hello my -
+        name is Robert
+   */
+  def hyphenate[A: Lexical](v: Vector[A], width: Int) = {
+    @tailrec def go(hyphenated: Vector[A], rem: Vector[A]): Vector[A] = rem match {
+      case _ if rem.isEmpty => hyphenated
+      case _ if hyphenated.isEmpty => go(rem.take(width), rem.drop(width))
+      case _ =>
+        val current = rem.take(width)
+        val n = if (current.size < width) 0 else 1
+        if (!isBlank(hyphenated.last) && !isCont(hyphenated.last) && !isBlank(current.head) ) {
+          go(hyphenated
+            .dropRight(1)
+            .:+(continuation)
+            .++(hyphenated.last +: current)
+            .dropRight(n), rem.drop(width - n))
+        }
+        else go(hyphenated ++ current, rem.drop(width))
+    }
+
+    go(Vector(), v)
+  }
 
   def format[A: Lexical](input: Vector[A], width: Int): Vector[A] = {
     input
       .grouped(width)
-      .flatMap {
-        _ :+ break
-        //        s =>
-        //        val (left, right) = (s.head, s.last)
-        //        if (isBlank(left.last) || isBlank(right.head)) left :+ break
-        //        else left :+ continuation :+ break
-      }
+      .flatMap(_ :+ break)
       .toVector
   }
 
@@ -225,9 +253,16 @@ object Formatter {
       self.formatter(data).ofWidth(width)
     }
 
+    def coevalH: Formatter[A] = {
+      val (data, width) = evaluateH
+      self.formatter(data).ofWidth(width)
+    }
+
     def evaluate1: Vector[A] = self.evaluate1(formatter)
 
     def evaluate: (Vector[A], Int) = self.evaluate(formatter)
+
+    def evaluateH: (Vector[A], Int) = self.evaluateH(formatter)
 
     def run: Vector[A] = self.run(formatter)
   }
