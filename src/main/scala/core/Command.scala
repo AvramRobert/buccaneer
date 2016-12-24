@@ -59,7 +59,7 @@ private[core]
 final class Cmd[A](types: TypedC[A], val syntax: Tree[Denot]) extends CmdBld[A] {
   def run(args: List[String]): Result[A] = (types run args)._2
 }
-
+// This is essentially a holey monoid what you've done here
 private[core]
 final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 

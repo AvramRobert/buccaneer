@@ -1,5 +1,239 @@
-//package core
-//
+package core
+
+import scala.annotation.tailrec
+
+object Man {
+
+}
+
+object Formatter {
+  self =>
+
+  /* Rules:
+     1. Lines are defined in terms of a maximal number of characters.
+     2. Insertion of elements should be compositional. Structures of text should be constructed by composing primitives.
+     3. This should be a Monad. -> what should bind then mean?
+     4. It should theoretically be able to spit out any type of output. Be it strings, bytes or other data representations. (it is here to format data in some way)
+
+     This should be treated similarly to how a Parser is treated. You define formatters that do some sort of formatting on some input text.
+     Formatters cannot format some text incrementally by "consuming" it, because they act globally on the whole text. Parsers seek incrementally different patterns
+     in inputs. That's why they can "consume" it. Formatters could be made similar, but their application is rather more global. They apply their rules to the complete
+     text.
+
+     Bind => apply this formatting and then apply the next. But this would invalidate the previous format.
+     This is essentially an endofunction on some type A, that modifies the structure of A.
+
+   */
+
+  trait Lexical[A] {
+    def blank: A
+
+    def break: A
+
+    def continuation: A
+
+    def eq(a1: A, a2: A): Boolean
+
+    def isBlank(a: A): Boolean = eq(a, blank)
+
+    def isCont(a: A): Boolean = eq(a, continuation)
+  }
+
+  type VRead[A] = Vector[A] => Vector[A]
+
+  sealed trait Card
+
+  case object All extends Card
+
+  case class Few(n: Int) extends Card
+
+  //case class Exact(lines: List[Int]) extends Card
+
+  sealed trait Formatter[A] {
+    protected def data: Vector[A]
+
+    def width: Int
+
+    def breadth: Int = data.size
+
+    def totalLines: Int = Math.ceil(breadth.toDouble / width.toDouble).toInt
+  }
+
+  case class Every[A](data: Vector[A], f: Vector[A] => Vector[A], width: Int) extends Formatter[A]
+
+  case class More[A](data: Vector[A], f: Vector[A] => Vector[A], width: Int, at: Int, n: Card) extends Formatter[A]
+
+
+  def blank[A](implicit lexical: Lexical[A]): A = lexical.blank
+
+  def break[A](implicit lexical: Lexical[A]): A = lexical.break
+
+  def continuation[A](implicit lexical: Lexical[A]): A = lexical.continuation
+
+  def isBlank[A](a: A)(implicit lexical: Lexical[A]): Boolean = lexical.isBlank(a)
+
+  def isCont[A](a: A)(implicit lexical: Lexical[A]): Boolean = lexical.isCont(a)
+
+  def lift[A](data: Vector[A]): Formatter[A] = formatter(data)
+
+  def formatter[A](data: Vector[A]): Formatter[A] = More(data, identity, data.size, 0, Few(1))
+
+  def fold[A, B](formatter: Formatter[A])(f: Every[A] => B)(g: More[A] => B): B = formatter match {
+    case every@Every(_, _, _) => f(every)
+    case more@More(_, _, _, _, _) => g(more)
+  }
+
+  def endo[A](formatter: Formatter[A])(f: VRead[A] => VRead[A]): Formatter[A] = fold[A, Formatter[A]](formatter)(e => e.copy(f = f(e.f)))(m => m.copy(f = f(m.f)))
+
+  def continue[A](formatter: Formatter[A])(f: Vector[A] => Vector[A]): Formatter[A] = endo(formatter)(_ andThen f)
+
+  def prepend[A](formatter: Formatter[A], a: A): Formatter[A] = continue(formatter)(v => a +: v)
+
+  def append[A](formatter: Formatter[A], a: A): Formatter[A] = continue(formatter)(_ :+ a)
+
+  def every[A](formatter: Formatter[A]): Formatter[A] = fold(formatter)(identity)(x => Every(x.data, x.f, x.width))
+
+  def one[A](formatter: Formatter[A]): Formatter[A] = fold(formatter)(e => More(e.data, e.f, e.width, 0, Few(1)))(m => More(m.data, m.f, m.width, m.at, Few(1)))
+
+  def repeat[A](formatter: Formatter[A], amount: Int): Formatter[A] = {
+    @tailrec def go(v: Vector[A], f: Vector[A] => Vector[A], n: Int): Vector[A] = {
+      if (n <= 0) v
+      else go(f(v), f, n - 1)
+    }
+
+    endo(formatter)(f => (v: Vector[A]) => go(v, f, amount))
+  }
+
+  def widen[A](bla: Formatter[A])(f: Int => Int): Formatter[A] = fold[A, Formatter[A]](bla)(e => e.copy(width = f(e.width)))(m => m.copy(width = f(m.width)))
+
+  // I may have found a problem. By intending every line a number >= than the width, then it will never terminate, because the process always adds a new line
+  // and considers it in the formatting. This should be caught.
+  def indentLeft[A: Lexical](formatter: Formatter[A], n: Int): Formatter[A] = repeat(prepend(formatter, blank), n)
+
+  def assimilate[A](formatter: Formatter[A], data: Vector[A]): Formatter[A] = continue(formatter)(_ ++ data)
+
+  def fill[A: Lexical](formatter: Formatter[A], n: Int): Formatter[A] = {
+    val (data, width) = formatter.evaluate
+    lift(data ++ (0 until n).map(_ => blank).toVector).ofWidth(width)
+  }
+
+
+  @tailrec def fillAll[A: Lexical](formatter: Formatter[A]): Formatter[A] = {
+    val n = formatter.breadth % formatter.width
+    if (n != 0) fillAll(fill(formatter, 1))
+    else formatter
+  }
+
+  @tailrec def evaluate[A](formatter: Formatter[A]): (Vector[A], Int) = formatter match {
+    case Every(data, f, width) => evaluate(More(data, f, width, 0, All))
+    case More(data, f, width, at, All) if at < data.size =>
+      val (start, end) = data.splitAt(at)
+      evaluate(More(start ++ consume(end, width)(f), f, width, at + width, All))
+    case More(data, f, width, at, Few(i)) if at < data.size && i > 0 =>
+      val (start, end) = data.splitAt(at)
+      evaluate(More(start ++ consume(end, width)(f), f, width, at + width, Few(i - 1)))
+    case More(data, _, width, _, _) => (data, width)
+  }
+
+  def evaluate1[A](formatter: Formatter[A]): Vector[A] = evaluate(formatter)._1
+
+  def interleave[A: Lexical](f1: Formatter[A], f2: Formatter[A]): Formatter[A] = {
+    val (left, lwidth) = f1.evaluate
+    val (right, rwidth) = f2.evaluate
+
+    lift(left.grouped(lwidth)
+      .zip(right.grouped(rwidth))
+      .flatMap(v => v._1 ++ v._2)
+      .toVector)
+      .widen(_ => lwidth + rwidth)
+  }
+
+  def emptyN[A: Lexical](n: Int): Formatter[A] = {
+    if (n <= 0) lift(Vector.empty[A])
+    lift(Vector(blank)).prepend(blank).repeat(n - 1)
+  }
+
+  def normalise[A: Lexical](f1: Formatter[A], f2: Formatter[A]): (Formatter[A], Formatter[A]) = {
+    def pad(larger: Formatter[A], smaller: Formatter[A]) = {
+      val amount = (larger.totalLines * smaller.width) - smaller.breadth
+      (larger.fillAll, smaller.fill(amount))
+    }
+
+    if (f1.totalLines >= f2.totalLines) pad(f1, f2)
+    else pad(f2, f1).swap
+  }
+
+  def align[A: Lexical](f1: Formatter[A], f2: Formatter[A], distance: Int): Formatter[A] = {
+    val (nf1, nf2) = normalise(f1, f2)
+    val empty = emptyN(nf1.totalLines * distance).ofWidth(distance)
+
+    nf1 interleave empty interleave nf2
+  }
+
+  def run[A: Lexical](formatter: Formatter[A]): Vector[A] = evaluate(formatter) match {
+    case (data, width) => format(data, width)
+  }
+
+  def consume[A](v: Vector[A], width: Int)(f: VRead[A]): Vector[A] = f(v.take(width)) ++ v.drop(width)
+
+  def format[A: Lexical](input: Vector[A], width: Int): Vector[A] = {
+    input
+      .grouped(width)
+      .flatMap {
+        _ :+ break
+        //        s =>
+        //        val (left, right) = (s.head, s.last)
+        //        if (isBlank(left.last) || isBlank(right.head)) left :+ break
+        //        else left :+ continuation :+ break
+      }
+      .toVector
+  }
+
+  implicit class FormatterSyntax[A: Lexical](formatter: Formatter[A]) {
+    def continue(f: Vector[A] => Vector[A]): Formatter[A] = self.continue(formatter)(f)
+
+    def every: Formatter[A] = self.every(formatter)
+
+    def one: Formatter[A] = self.one(formatter)
+
+    def indentLeft(n: Int): Formatter[A] = self.indentLeft(formatter, n)
+
+    def ofWidth(i: Int): Formatter[A] = self.widen(formatter)(_ => i)
+
+    def widen(f: Int => Int): Formatter[A] = self.widen(formatter)(f)
+
+    def assimilate(v: Vector[A]): Formatter[A] = self.assimilate(formatter, v)
+
+    def align(that: Formatter[A], distance: Int): Formatter[A] = self.align(formatter, that, distance: Int)
+
+    def repeat(n: Int): Formatter[A] = self.repeat(formatter, n)
+
+    def append(a: A): Formatter[A] = self.append(formatter, a)
+
+    def prepend(a: A): Formatter[A] = self.prepend(formatter, a)
+
+    def fill(n: Int): Formatter[A] = self.fill(formatter, n)
+
+    def fillAll: Formatter[A] = self.fillAll(formatter)
+
+    def interleave(that: Formatter[A]): Formatter[A] = self.interleave(formatter, that)
+
+    def corun: Formatter[A] = lift(self.run(formatter))
+
+    def coeval: Formatter[A] = {
+      val (data, width) = evaluate
+      self.formatter(data).ofWidth(width)
+    }
+
+    def evaluate1: Vector[A] = self.evaluate1(formatter)
+
+    def evaluate: (Vector[A], Int) = self.evaluate(formatter)
+
+    def run: Vector[A] = self.run(formatter)
+  }
+
+}
+
 //import core.Texer.Text
 //import Binary.treeSyntax
 //
