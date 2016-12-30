@@ -2,11 +2,34 @@
 1.
 Because commands are binary trees, can't I use a huffman encoding to serialise these trees as binary numbers and use this form as keys?
 
-=== Experiments ===
-1.
-sbt-bolierplate for hlist => functionN conversion. I really don't want to enforce esoteric compiler plugins, but this is worth a test.
-Based on my preliminary analysis, the way my API should behave might make this either impossible or very difficult to achieve.
+2.
+I may perhaps not really need `Tree`. Everything implemented so far is actually pretty linear.
 
+3.
+The current command builder is quite bulky and does not allow for much flexibility in actually expanding commands at various points in the structure.
+Experiment with the following idea:
+Let commands be defined syntactically with infix operators and let this implicitly dictate their positionality. For example:
+
+val add = command("add").msg("The add command")
+val rec = option("-r").msg("Performs operation recursively")
+val a = argument[Int: Read].msg("First argument")
+val b = argument[Int: Read].msg("Second argument")
+val f = (a: Int, b: Int) => a + b
+
+(add - rec - a - b).apply(f)
+
+(add - a - b).apply(f)
+
+or inlined
+
+add.
+  -(option("-a").msg("Some thing a")).
+  -(a).
+  -(b).
+  apply(f)
+
+This would effectively allow COMPLETE reuse of components and would also allow me to control relativity based on
+the operators used. For example: add - option("a") <- argument[Int] <- argument[Int]
 
 === To implement ===
 1. Command component descriptions // done
@@ -15,3 +38,12 @@ Based on my preliminary analysis, the way my API should behave might make this e
 4. Partial refactoring
 5. Tests
 6. Documentation
+
+
+=====================
+Move the implicit things only I use to a package object. This implies the lexical for the formatters and the traverse instance for vector.
+Make sure that you also refactor the functions for `Formatter`, as the lexicals required by them will then clash with the implicit value in the package object.
+(even though they require a `Lexical[A]` and not the concrete `Lexical[Char]`. Perhaps may perhaps be a problem of the context boundary.
+I haven't checked to see if the behaviour persists if I explicitly say that I want an implicit val of a lexical.
+
+This should then essentially do it for the MAN page API. I then only need integrate it with the interpreter.

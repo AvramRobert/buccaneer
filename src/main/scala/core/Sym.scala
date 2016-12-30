@@ -3,10 +3,13 @@ package core
 import scala.annotation.tailrec
 
 object Sym {
-  implicit def conversion(s: String): Sym = Label(s)
+  def apply(s: String): Sym = Label(s.trim)
 }
 
 sealed trait Sym {
+
+  def isSymbol(s: String): Boolean = find(_ == s).fold(false)(_ => true)
+
   def | (that: String): Alternative = this match {
     case Label(v) => Alternative(v, Label(that))
     case Alternative(v, alt) => Alternative(v, alt | that)
@@ -28,9 +31,9 @@ case class Label(value: String) extends Sym
 case class Alternative(value: String, alt: Sym) extends Sym
 
 object Denot {
-  def id(symbol: Sym, docs: Docs = Docs.empty): Identifier = Identifier(symbol, docs)
-  def typing[A](proof: Reified[A], docs: Docs = Docs.empty): Typing[A] = Typing(proof, docs)
-  def typedId[A](symbol: Sym, proof: Reified[A], docs: Docs = Docs.empty): TypedIdentifier[A] = TypedIdentifier(symbol, proof, docs)
+  def id(symbol: Sym, isMajor: Boolean = false, docs: Docs = Docs.empty): Identifier = Identifier(symbol, isMajor, docs)
+  def typing[A](proof: Read[A], docs: Docs = Docs.empty): Typing[A] = Typing(proof, docs)
+  def typedId[A](symbol: Sym, proof: Read[A], docs: Docs = Docs.empty): TypedIdentifier[A] = TypedIdentifier(symbol, proof, docs)
 }
 
 sealed trait Denot {
@@ -39,18 +42,29 @@ sealed trait Denot {
     case _ => false
   }
 
+  def isMajorIdentifier: Boolean = this match {
+    case Identifier(_, isMajor, _) => isMajor
+    case _ => false
+  }
+
   def docs: Docs
 
   def mapDocs(f: Docs => Docs): Denot = this match {
-    case id @ Identifier(_, docs) => id.copy(docs = f(docs))
+    case id @ Identifier(_, _, docs) => id.copy(docs = f(docs))
     case typing @ Typing(_, docs) => typing.copy(docs = f(docs))
     case typedId @ TypedIdentifier(_, _, docs) => typedId.copy(docs = f(docs))
   }
+
+  def show: String = this match {
+    case Typing(_, _) => "<value>"
+    case Identifier(sym, _, _) => sym.show
+    case TypedIdentifier(sym, _, _) => s"${sym.show}<value>"
+  }
 }
 
-case class Identifier(symbol: Sym, docs: Docs) extends Denot
-case class Typing[A](proof: Reified[A], docs: Docs) extends Denot
-case class TypedIdentifier[A](symbol: Sym, proof: Reified[A], docs: Docs) extends Denot
+case class Identifier(symbol: Sym, isMajor: Boolean, docs: Docs) extends Denot
+case class Typing[A](proof: Read[A], docs: Docs) extends Denot
+case class TypedIdentifier[A](symbol: Sym, proof: Read[A], docs: Docs) extends Denot
 
 object Docs {
   def empty: Docs = Docs("")

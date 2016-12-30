@@ -6,13 +6,24 @@ import Validators._
 import core.Store.MapT
 import Store._
 import Binary.treeSyntax
-import core.Reified._
+import core.Read._
 import scalaz.syntax.applicative._
 
 //TODO: Can't I generalise this? Or should'nt I generalise this?
 object Interpreter {
   type Step[A, B] = Kleisli[Result, A, B]
   type IAST = Tree[(Denot, String)] // interpolated abstract syntax tree
+
+  def partialMatch(commands: Set[Tree[Denot]], input: List[String]): Set[Tree[Denot]] =
+    commands.filter {
+      _.zipL(input).
+        serialise.
+        forall {
+          case (Identifier(sym, _, _), value) => sym.isSymbol(value)
+          case (TypedIdentifier(sym, _, _), value) => sym.find(a => value startsWith a).fold(false)(_ => true)
+          case (Typing(p, _), value) => p(value).isSuccess
+        }
+    }
 
   def step[A, B](f: A => Result[B]): Step[A, B] = Kleisli[Result, A, B](f)
 
@@ -34,25 +45,9 @@ object Interpreter {
       validate(types) andThen
       select
 
-  //  def help[A](store: Store[Store.MapT, A]): Store[MapT, Any] = {
-  //    store.keySet
-  //      .filter(_.rootOf(_.isCommand))
-  //      .map {
-  //        _.rootOption
-  //          .fold(Runner(Command.runnerState(_ => ()), Binary.lift(Sym.named("", "")))) { com =>
-  //            val syntax = Binary.lift(com) affix Sym.named("--help", "Help")
-  //            val f = Command.runnerState[Unit] { _ =>
-  //              println(Man.buildFor(store.keySet.toList, com))
-  //            }
-  //            Runner(f, syntax)
-  //          }
-  //      }
-  //      .foldLeft(Store.widen(store))(_ +> _)
-  //  }
-
   def fit(commands: Set[Tree[Denot]]) = step { (input: List[String]) =>
     commands.filter {
-      case tree@Identifier(Label(value), _) -< (_, _) => (value == input.head) && tree.depth == input.size
+      case tree@Identifier(Label(value), _, _) -< (_, _) => (value == input.head) && tree.depth == input.size
     }
       .map(_ zipL input)
       .toList
@@ -88,7 +83,7 @@ object Interpreter {
 
 object Validators {
   def syntax(assoc: (Denot, String)) = assoc._1 match {
-    case Identifier(symbol, _) => symbol.find(_ == assoc._2) match {
+    case Identifier(symbol, _, _) => symbol.find(_ == assoc._2) match {
       case Some(_) => assoc.successNel
       case None => new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${symbol.show}").failureNel
     }

@@ -1,10 +1,10 @@
 package core
 
-import core.Reified.Result
+import core.Read.Result
 
 import scalaz.{Bind, ValidationNel}
 
-object Reified {
+object Read {
   type Result[A] = ValidationNel[Throwable, A]
 
   implicit val bindResult: Bind[Result] = new Bind[Result] {
@@ -13,11 +13,11 @@ object Reified {
     override def map[A, B](fa: Result[A])(f: (A) => B): Result[B] = fa map f
   }
 
-  def apply[A](f: String => Result[A]): Reified[A] = new Reified[A] {
+  def apply[A](f: String => Result[A]): Read[A] = new Read[A] {
     override def apply(a: String): Result[A] = f(a)
   }
 }
 
-trait Reified[A] {
+trait Read[A] {
   def apply(a: String): Result[A]
 }

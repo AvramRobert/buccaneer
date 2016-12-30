@@ -1,6 +1,6 @@
 package core
 
-import core.Reified.Result
+import core.Read.Result
 
 import scala.annotation.tailrec
 import scalaz.Applicative
@@ -27,10 +27,26 @@ object Binary {
     case Leaf => Leaf
   }
 
+  @tailrec def dropWhile[A](t: Tree[A])(p: A => Boolean): Tree[A] = t match {
+    case Node(v, lt, rt) if p(v) => dropWhile(lt affix rt)(p)
+    case node => node
+  }
+
+  def takeWhile[A](t: Tree[A])(p: A => Boolean): Tree[A] = t match {
+    case Node(v, lt, rt) if p(v) =>
+      val left = takeWhile(lt)(p)
+      if(left.depth == lt.depth) Node(v, lt, takeWhile(rt)(p))
+      else Node(v, left, Leaf)
+    case Node(_, _, _) => Leaf
+    case node => node
+  }
+
   def traverse[G[_], A, B](t: Tree[A])(f: A => G[B])(implicit ap: Applicative[G]): G[Tree[B]] = t match {
     case Node(v, lt, rt) => (f(v) |@| traverse(lt)(f) |@| traverse(rt)(f)) (Node.apply)
     case Leaf => ap point Leaf
   }
+
+  def sequence[G[_], A](t: Tree[G[A]])(implicit ap: Applicative[G]): G[Tree[A]] = traverse(t)(identity)
 
   @tailrec def tailFold[A, B](branches: List[Tree[A]], b: B)(f: (B, A) => B): B = branches match {
     case Node(v, l, r) :: t => tailFold(l :: r :: t, f(b, v))(f)
@@ -41,10 +57,6 @@ object Binary {
   def foldl[A, B](t: Tree[A], b: B)(f: (B, A) => B): B = tailFold(t :: Nil, b)(f)
 
   def foldr[A, B](t: Tree[A], b: B)(f: (A, B) => B): B = tailFold(t :: Nil, b)((l, r) => f(r, l))
-
-  def zipToList[A, B](tree: Tree[A], list: List[B]): List[(A, B)] = foldl(tree, (List.empty[(A, B)], list)) {
-    case ((nl, h :: t), a) => ((a, h) :: nl, t)
-  }._1.reverse
 
   def zipL[A, B](tree: Tree[A], list: List[B]): Tree[(A, B)] = tree match {
     case r -< (tl, tr) => list match {
@@ -74,6 +86,20 @@ object Binary {
     case Leaf => Leaf
   }
 
+  def serialise[A](t: Tree[A]): Vector[A] = foldl(t, Vector[A]())(_ :+ _)
+
+  def zips[A, B](tree: Tree[A], list: List[B]): Tree[(A, Option[B])] = tree match {
+    case v -< (l, r) => list match {
+      case h :: t =>
+        val depth = l.depth
+        Node((v, Some(h)), zips(l, t.take(depth)), zips(r, t.drop(depth)))
+      case Nil => Node((v, None), l.map(a => (a, None)), r.map(a => (a, None)))
+    }
+    case Leaf => Leaf
+  }
+
+  def string[A](t: Tree[A], sep: String)(f: A => String): String = foldl(t, "")((x, y) => x + sep + f(y))
+
   implicit def treeSyntax[A](t: Tree[A]): TreeSyntax[A] = TreeSyntax(t)
 }
 
@@ -85,6 +111,7 @@ object -< {
   }
 }
 
+// It may be perhaps a good idea to turn this into a Vector[Denot] -> Some things would become MUCH simpler and faster
 sealed trait Tree[+A]
 
 case class Node[A](value: A, left: Tree[A] = Leaf, right: Tree[A] = Leaf) extends Tree[A]
@@ -106,8 +133,6 @@ case class TreeSyntax[A](t: Tree[A]) {
 
   def rootOf(p: A => Boolean): Boolean = Binary.rootOf(t)(p)
 
-  def zipToList[B](list: List[B]): List[(A, B)] = Binary.zipToList(t, list)
-
   def depth: Int = Binary.depth(t)
 
   def zipL[B](list: List[B]): Tree[(A, B)] = Binary.zipL(t, list)
@@ -126,5 +151,15 @@ case class TreeSyntax[A](t: Tree[A]) {
 
   def foldLeft[B](b: B)(f: (B, A) => B): B = Binary.foldl(t, b)(f)
 
+  def dropWhile(p: A => Boolean): Tree[A] = Binary.dropWhile(t)(p)
+
+  def takeWhile(p: A => Boolean): Tree[A] = Binary.takeWhile(t)(p)
+
+  def serialise: Vector[A] = Binary.serialise(t)
+
+  def string(sep: String)(f: A => String): String = Binary.string(t, sep)(f)
+
   def mapLast(f: A => A): Tree[A] = Binary.mapLast(t)(f)
+
+  def zips[B](list: List[B]): Tree[(A, Option[B])] = Binary.zips(t, list)
 }

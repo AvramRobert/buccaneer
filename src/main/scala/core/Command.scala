@@ -5,20 +5,20 @@ import scalaz.{State, _}
 import Binary.treeSyntax
 import scala.language.reflectiveCalls
 import Denot._
-import Reified._
+import Read._
 import scalaz.syntax.validation._
 
 object Command {
   type TypedC[A] = IndexedState[List[String], List[String], Result[A]]
 
-  def apply(label: String): Cmd0 = new Cmd0(Binary.lift(id(label)))
+  def apply(label: String): Cmd0 = new Cmd0(Binary.lift(id(Sym(label), isMajor = true)))
 }
 
 private[core]
 sealed trait CmdBld[+A] {
-  protected def coerce[B](f: String => Result[B]): TypedC[B] = coerce(Reified(f))
+  protected def coerce[B](f: String => Result[B]): TypedC[B] = coerce(Read(f))
 
-  protected def coerce[B](proof: Reified[B]): TypedC[B] =
+  protected def coerce[B](proof: Read[B]): TypedC[B] =
     for {
       types <- State.get[List[String]]
       _ <- State.modify[List[String]] { list =>
@@ -41,15 +41,15 @@ sealed trait CmdBld[+A] {
     override def map[B, C](fa: TypedC[B])(f: B => C): TypedC[C] = fa map (_ map f)
   }
 
-  protected def proof[B](implicit r: Reified[B]): Reified[B] = r
+  protected def proof[B](implicit r: Read[B]): Read[B] = r
 
   protected def txt(contents: String, syntax: Tree[Denot]): Tree[Denot] = syntax mapLast (_ mapDocs (_ mapMsg (_ => contents)))
 
-  protected def opt[C[_] <: CmdBld[_], B](label: Sym)(f: Tree[Denot] => C[B]): C[B] = (f compose Binary.lift[Denot]) (id(label))
+  protected def opt[C[_] <: CmdBld[_], B](label: Sym, maj: Boolean = false)(f: Tree[Denot] => C[B]): C[B] = (f compose Binary.lift[Denot]) (id(label, isMajor = maj))
 
-  protected def arg[C[_] <: CmdBld[_], B](proof: Reified[B])(f: (TypedC[B], Tree[Denot]) => C[B]): C[B] = f(coerce(proof), Binary.lift(typing(proof)))
+  protected def arg[C[_] <: CmdBld[_], B](proof: Read[B])(f: (TypedC[B], Tree[Denot]) => C[B]): C[B] = f(coerce(proof), Binary.lift(typing(proof)))
 
-  protected def assign[C[_] <: CmdBld[_], B](label: Sym, proof: Reified[B])(f: (TypedC[B], Tree[Denot]) => C[B]): C[B] = {
+  protected def assign[C[_] <: CmdBld[_], B](label: Sym, proof: Read[B])(f: (TypedC[B], Tree[Denot]) => C[B]): C[B] = {
     val newProof = Implicits.association(label)(proof)
     f(coerce(newProof), Binary.lift(typedId(label, newProof)))
   }
@@ -59,17 +59,19 @@ private[core]
 final class Cmd[A](types: TypedC[A], val syntax: Tree[Denot]) extends CmdBld[A] {
   def run(args: List[String]): Result[A] = (types run args)._2
 }
-// This is essentially a holey monoid what you've done here
+
 private[core]
 final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
   def msg(contents: String): Cmd0 = new Cmd0(txt(contents, syntax0))
 
+  def subcommand(label: Sym): Cmd0 = opt[({type α[x] = Cmd0})#α, Nothing](label, maj = true) { syntax => new Cmd0(syntax0 affix syntax) }
+
   def option(label: Sym): Cmd0 = opt[({type α[x] = Cmd0})#α, Nothing](label) { syntax => new Cmd0(syntax0 affix syntax) }
 
-  def argument[A: Reified]: Cmd1[A] = arg(proof) { (types, syntax) => new Cmd1(types, syntax0 affix syntax) }
+  def argument[A: Read]: Cmd1[A] = arg(proof) { (types, syntax) => new Cmd1(types, syntax0 infix syntax) }
 
-  def assignment[A: Reified](label: Sym): Cmd1[A] = assign(label, proof) { (types, syntax) => new Cmd1(types, syntax0 affix syntax) }
+  def assignment[A: Read](label: Sym): Cmd1[A] = assign(label, proof) { (types, syntax) => new Cmd1(types, syntax0 affix syntax) }
 
   def apply[A](f: () => A): Cmd[A] = new Cmd(coerce(_ => f().successNel), syntax0)
 
@@ -77,11 +79,13 @@ final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
     def msg(contents: String): Cmd1[A] = new Cmd1(types1, txt(contents, syntax1))
 
+    def subcommand(label: Sym): Cmd1[A] = opt(label, maj = true) { syntax => new Cmd1[A](types1, syntax1 affix syntax) }
+
     def option(label: Sym): Cmd1[A] = opt(label) { syntax => new Cmd1(types1, syntax1 affix syntax) }
 
-    def argument[B: Reified]: Cmd2[B] = arg(proof) { (types, syntax) => new Cmd2(types, syntax1 affix syntax) }
+    def argument[B: Read]: Cmd2[B] = arg(proof) { (types, syntax) => new Cmd2(types, syntax1 infix syntax) }
 
-    def assignment[B: Reified](label: Sym): Cmd2[B] = assign(label, proof) { (types, syntax) => new Cmd2(types, syntax1 affix syntax) }
+    def assignment[B: Read](label: Sym): Cmd2[B] = assign(label, proof) { (types, syntax) => new Cmd2(types, syntax1 affix syntax) }
 
     def apply[B](f: A => B): Cmd[B] = new Cmd(applier.map(types1)(f), syntax1)
 
@@ -89,11 +93,11 @@ final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
       def msg(contents: String): Cmd2[B] = new Cmd2(types2, txt(contents, syntax2))
 
-      def option(label: Sym): Cmd2[B] = opt(label) { syntax => new Cmd2(types2, syntax2 affix syntax1) }
+      def option(label: Sym): Cmd2[B] = opt(label) { syntax => new Cmd2(types2, syntax2 affix syntax) }
 
-      def argument[C: Reified]: Cmd3[C] = arg(proof) { (types, syntax) => new Cmd3(types, syntax2 affix syntax) }
+      def argument[C: Read]: Cmd3[C] = arg(proof) { (types, syntax) => new Cmd3(types, syntax2 infix syntax) }
 
-      def assignment[C: Reified](label: Sym): Cmd3[C] = assign(label, proof) { (types, syntax) => new Cmd3(types, syntax2 affix syntax) }
+      def assignment[C: Read](label: Sym): Cmd3[C] = assign(label, proof) { (types, syntax) => new Cmd3(types, syntax2 affix syntax) }
 
       def apply[C](f: (A, B) => C): Cmd[C] = new Cmd(applier.apply2(types1, types2)(f), syntax2)
 
@@ -103,9 +107,9 @@ final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
         def option(label: Sym): Cmd3[C] = opt(label) { syntax => new Cmd3(types3, syntax3 affix syntax) }
 
-        def argument[D: Reified]: Cmd4[D] = arg(proof) { (types, syntax) => new Cmd4(types, syntax3 affix syntax) }
+        def argument[D: Read]: Cmd4[D] = arg(proof) { (types, syntax) => new Cmd4(types, syntax3 infix syntax) }
 
-        def assignment[D: Reified](label: Sym): Cmd4[D] = assign(label, proof) { (types, syntax) => new Cmd4(types, syntax3 affix syntax) }
+        def assignment[D: Read](label: Sym): Cmd4[D] = assign(label, proof) { (types, syntax) => new Cmd4(types, syntax3 affix syntax) }
 
         def apply[D](f: (A, B, C) => D): Cmd[D] = new Cmd(applier.apply3(types1, types2, types3)(f), syntax3)
 
@@ -115,9 +119,9 @@ final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
           def option(label: Sym): Cmd4[D] = opt(label) { syntax => new Cmd4(types4, syntax4 affix syntax) }
 
-          def argument[E: Reified]: Cmd5[E] = arg(proof) { (types, syntax) => new Cmd5(types, syntax4 affix syntax) }
+          def argument[E: Read]: Cmd5[E] = arg(proof) { (types, syntax) => new Cmd5(types, syntax4 infix syntax) }
 
-          def assignment[E: Reified](label: Sym): Cmd5[E] = assign(label, proof) { (types, syntax) => new Cmd5(types, syntax4 affix syntax) }
+          def assignment[E: Read](label: Sym): Cmd5[E] = assign(label, proof) { (types, syntax) => new Cmd5(types, syntax4 affix syntax) }
 
           def apply[E](f: (A, B, C, D) => E): Cmd[E] = new Cmd(applier.apply4(types1, types2, types3, types4)(f), syntax4)
 
@@ -127,9 +131,9 @@ final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
             def option(label: Sym): Cmd5[E] = opt(label) { syntax => new Cmd5(types5, syntax5 affix syntax) }
 
-            def argument[F: Reified]: Cmd6[F] = arg(proof) { (types, syntax) => new Cmd6(types, syntax5 affix syntax) }
+            def argument[F: Read]: Cmd6[F] = arg(proof) { (types, syntax) => new Cmd6(types, syntax5 infix syntax) }
 
-            def assignment[F: Reified](label: Sym): Cmd6[F] = assign(label, proof) { (types, syntax) => new Cmd6(types, syntax5 affix syntax) }
+            def assignment[F: Read](label: Sym): Cmd6[F] = assign(label, proof) { (types, syntax) => new Cmd6(types, syntax5 affix syntax) }
 
             def apply[F](f: (A, B, C, D, E) => F): Cmd[F] = new Cmd(applier.apply5(types1, types2, types3, types4, types5)(f), syntax5)
 
@@ -139,9 +143,9 @@ final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
               def option(label: Sym): Cmd6[F] = opt(label) { syntax => new Cmd6(types6, syntax6 affix syntax) }
 
-              def argument[G: Reified]: Cmd7[G] = arg(proof) { (types, syntax) => new Cmd7(types, syntax6 affix syntax) }
+              def argument[G: Read]: Cmd7[G] = arg(proof) { (types, syntax) => new Cmd7(types, syntax6 infix syntax) }
 
-              def assignment[G: Reified](label: Sym): Cmd7[G] = assign(label, proof) { (types, syntax) => new Cmd7(types, syntax6 affix syntax) }
+              def assignment[G: Read](label: Sym): Cmd7[G] = assign(label, proof) { (types, syntax) => new Cmd7(types, syntax6 affix syntax) }
 
               def apply[G](f: (A, B, C, D, E, F) => G): Cmd[G] = new Cmd(applier.apply6(types1, types2, types3, types4, types5, types6)(f), syntax6)
 
@@ -151,9 +155,9 @@ final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
                 def option(label: Sym): Cmd7[G] = opt(label) { syntax => new Cmd7(types7, syntax7 affix syntax) }
 
-                def argument[H: Reified]: Cmd8[H] = arg(proof) { (types, syntax) => new Cmd8(types, syntax7 affix syntax) }
+                def argument[H: Read]: Cmd8[H] = arg(proof) { (types, syntax) => new Cmd8(types, syntax7 infix syntax) }
 
-                def assignment[H: Reified](label: Sym): Cmd8[H] = assign(label, proof) { (types, syntax) => new Cmd8(types, syntax7 affix syntax) }
+                def assignment[H: Read](label: Sym): Cmd8[H] = assign(label, proof) { (types, syntax) => new Cmd8(types, syntax7 affix syntax) }
 
                 def apply[H](f: (A, B, C, D, E, F, G) => H): Cmd[H] = new Cmd(applier.apply7(types1, types2, types3, types4, types5, types6, types7)(f), syntax7)
 
@@ -163,9 +167,9 @@ final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
                   def option(label: Sym): Cmd8[H] = opt(label) { syntax => new Cmd8(types8, syntax8 affix syntax) }
 
-                  def argument[I: Reified]: Cmd9[I] = arg(proof) { (types, syntax) => new Cmd9(types, syntax8 affix syntax) }
+                  def argument[I: Read]: Cmd9[I] = arg(proof) { (types, syntax) => new Cmd9(types, syntax8 infix syntax) }
 
-                  def assignment[I: Reified](label: Sym): Cmd9[I] = assign(label, proof) { (types, syntax) => new Cmd9(types, syntax8 affix syntax) }
+                  def assignment[I: Read](label: Sym): Cmd9[I] = assign(label, proof) { (types, syntax) => new Cmd9(types, syntax8 affix syntax) }
 
                   def apply[I](f: (A, B, C, D, E, F, G, H) => I): Cmd[I] = new Cmd(applier.apply8(types1, types2, types3, types4, types5, types6, types7, types8)(f), syntax8)
 
@@ -175,9 +179,9 @@ final class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
                     def option(label: Sym): Cmd9[I] = opt(label) { syntax => new Cmd9(types9, syntax9 affix syntax) }
 
-                    def argument[J: Reified]: Cmd10[J] = arg(proof) { (types, syntax) => new Cmd10(types, syntax9 affix syntax) }
+                    def argument[J: Read]: Cmd10[J] = arg(proof) { (types, syntax) => new Cmd10(types, syntax9 infix syntax) }
 
-                    def assignment[J: Reified](label: Sym): Cmd10[J] = assign(label, proof) { (types, syntax) => new Cmd10(types, syntax9 affix syntax) }
+                    def assignment[J: Read](label: Sym): Cmd10[J] = assign(label, proof) { (types, syntax) => new Cmd10(types, syntax9 affix syntax) }
 
                     def apply[J](f: (A, B, C, D, E, F, G, H, I) => J): Cmd[J] = new Cmd(applier.apply9(types1, types2, types3, types4, types5, types6, types7, types8, types9)(f), syntax9)
 

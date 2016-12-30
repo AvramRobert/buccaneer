@@ -1,28 +1,198 @@
 package core
 
+import Formatter.{Formatter, Lexical, lift}
+import Formatter.syntax._
+import Binary.treeSyntax
+import core.Store._
+import scalaz.syntax.traverse._
 import scala.annotation.tailrec
+import scalaz.{Applicative, Reader, Traverse}
+
 
 object Man {
 
+  case class HelpConfig(textWidth: Int, indentation: Int, columnSpacing: Int)
+
+  type Section[A] = Reader[HelpConfig, A]
+
+  implicit val traverseVector: Traverse[Vector] = new Traverse[Vector] {
+    override def traverseImpl[G[_], A, B](fa: Vector[A])(f: (A) => G[B])(implicit ap: Applicative[G]): G[Vector[B]] = {
+      fa.foldLeft(ap.point(Vector[B]())) { (gvb, a) =>
+        ap.apply2(gvb, f(a))(_ :+ _)
+      }
+    }
+  }
+
+  implicit val lexicalChar: Lexical[Char] = new Lexical[Char] {
+    override def blank = ' '
+
+    override def break = '\n'
+
+    override def continuation = '-'
+
+    override def eq(a1: Char, a2: Char) = a1 == a2
+  }
+
+  def section[A](f: HelpConfig => A): Section[A] = Reader(f)
+
+  def emptySection: Section[Formatter[Char]] = section(_ => Formatter.empty[Char])
+
+  def text(s: String): Formatter[Char] = lift(s.toCharArray.toVector)
+
+  def line(txt: String)(fsize: HelpConfig => Int): Section[Formatter[Char]] = section { config =>
+    text(txt).
+      push(config.indentation).
+      every.
+      ofWidth(config.indentation + fsize(config)).
+      fillAll
+  }
+
+  def columned(left: String, right: String, largest: Int): Section[Formatter[Char]] = for {
+    key <- line(left)(config => largest + config.indentation)
+    value <- line(right)(config => config.textWidth - config.columnSpacing - config.indentation - largest)
+    aligned <- section { config => key.align(value, config.columnSpacing) }
+  } yield aligned
+
+  def paired(command: Tree[Denot]): Vector[(String, String)] = {
+    @tailrec def go(cur: Tree[Denot], acc: Vector[(String, String)] = Vector()): Vector[(String, String)] = cur match {
+      case a -< (l, r) =>
+        val left = l.foldLeft(a.show) { (str, denot) => s"$str ${denot.show}" }
+        go(r, acc :+ (left, a.docs.msg))
+      case Leaf => acc
+    }
+
+    go(command)
+  }
+
+  def command(tree: Tree[Denot]): Section[Formatter[Char]] = tree.
+    takeWhile(_.isMajorIdentifier).
+    serialise match {
+    case name if name.isEmpty => emptySection
+    case name => Reader { help =>
+      text(name.
+        map(_.show).
+        mkString(" ") ++ s" - ${name.last.docs.msg}").
+        ofWidth(help.textWidth).
+        push(help.indentation).
+        every
+    }
+  }
+
+  def largest(all: Vector[Tree[Denot]]): Int = all.
+    map {
+      case a -< (l, _) => l.foldLeft(a.show.length)((x, y) => x + y.show.length) + 1
+      case Leaf => 0
+    }.
+    max
+
+  def usage(all: Vector[Tree[Denot]]): Section[Vector[Formatter[Char]]] = section { config =>
+    val com = all.headOption.fold("")(_.takeWhile(_.isMajorIdentifier).string(" ")(_.show))
+
+    Stream.continually(text(s"$com")).
+      take(all.size).
+      zip(all.map { a => text(a.dropWhile(_.isMajorIdentifier).string(" ")(_.show)) }).
+      map {
+        case (left, right) =>
+          (left absorbT right).
+            coeval.
+            push(config.indentation - 1).
+            ofWidth(config.textWidth)
+      }.
+      toVector
+  }
+
+  def subcommands(all: Vector[Tree[Denot]]): Section[Vector[Formatter[Char]]] = {
+    val max = largest(all)
+    all.filter(_.rootOf(_.isMajorIdentifier)).
+      map(_.rootOption).
+      distinct.
+      map(_.fold(emptySection) { denot =>
+        columned(denot.show, denot.docs.msg, max)
+      }).
+      sequenceU
+  }
+
+  def options(all: Vector[Tree[Denot]]): Section[Vector[Formatter[Char]]] = {
+    val max = largest(all)
+    all.filter(_.rootOf(denot => !denot.isMajorIdentifier)).
+      flatMap(paired).
+      distinct.
+      map(t => columned(t._1, t._2, max)).
+      sequenceU
+  }
+
+  def makeText(formatters: TraversableOnce[Formatter[Char]]): String = formatters.foldLeft(Vector.empty[Char]) { (acc, frmt) => acc ++ frmt.run }.mkString("")
+
+  def whenEmpty(v: Vector[Formatter[Char]])(txt: => String): Vector[Formatter[Char]] = {
+    if (v.isEmpty) Vector(text(txt))
+    else v
+  }
+
+  def help[A](store: Store[MapT, A], input: List[String]): Section[String] = for {
+    matched <- section(_ => Interpreter.partialMatch(store.keySet, input).toVector)
+    zipped = matched.map(_ zips input)
+    first = zipped.map(_.takeWhile(_._2.isDefined).map(_._1))
+    rest = zipped.map(_.dropWhile(_._2.isDefined).map(_._1))
+    commandSection <- first.headOption.fold(emptySection)(command)
+    usageSection <- usage(matched)
+    optionsSection <- options(rest)
+    subcommandSection <- subcommands(rest)
+    linebreak = Formatter.empty[Char]
+  } yield makeText {
+    (text("NAME") +:
+      commandSection +:
+      linebreak +:
+      text("USAGE") +:
+      whenEmpty(usageSection)("No usage information available.")) ++
+      (linebreak +:
+        text("OPTIONS") +:
+        whenEmpty(optionsSection)("There are no options available.")) ++
+      (linebreak +:
+        text("COMMANDS") +:
+        whenEmpty(subcommandSection)("There are no commands available.") :+
+        linebreak :+
+        text("Hint: You can call `--sgst` at any point to receive a list of all possible commands that match your current input."))
+  }
+
+  def suggest[A](store: Store[MapT, A], input: List[String]): Section[String] = section { _ =>
+    makeText {
+      Interpreter.partialMatch(store.keySet, input).
+        map { tree =>
+          text((tree zips input).string(" ") {
+            case (_, Some(v)) => v
+            case (denot, _) => denot.show
+          })
+        }
+    }
+  }
+
+  def helper[A](store: Store[MapT, A], helpConfig: HelpConfig): List[String] => String = input => {
+    help(store, input).run(helpConfig)
+  }
+
+  def suggester[A](store: Store[MapT, A], helpConfig: HelpConfig): List[String] => String = input => {
+    suggest(store, input).run(helpConfig)
+  }
 }
 
 object Formatter {
   self =>
 
-  /* Rules:
-     1. Lines are defined in terms of a maximal number of characters.
-     2. Insertion of elements should be compositional. Structures of text should be constructed by composing primitives.
-     3. This should be a Monad. -> what should bind then mean?
-     4. It should theoretically be able to spit out any type of output. Be it strings, bytes or other data representations. (it is here to format data in some way)
-
-     This should be treated similarly to how a Parser is treated. You define formatters that do some sort of formatting on some input text.
-     Formatters cannot format some text incrementally by "consuming" it, because they act globally on the whole text. Parsers seek incrementally different patterns
-     in inputs. That's why they can "consume" it. Formatters could be made similar, but their application is rather more global. They apply their rules to the complete
-     text.
-
-     Bind => apply this formatting and then apply the next. But this would invalidate the previous format.
-     This is essentially an endofunction on some type A, that modifies the structure of A.
-
+  /*
+  Notes for improvements:
+    Idea: Define a formatter in terms what can be done at each line.
+     One formatter might apply some formatting to each line, to some subset of lines or to a specific line.
+     There are, however, some additional things it might do.
+     It might adjust input in order to format something relative to something else. (i.e. filling with blanks, or hyphenating)
+     This means that the formatting of some line might be adding additional lines to it.
+     Hyphenation in particular is a special case of formatting that is applied at every line in relation to the previous one.
+     This is where context comes into play and a monad might emerge.
+     A monad can be defined by relating one homologous formatting to another. The homology in this scenario is defined
+     in terms of the line at which the formatting occurs. `bind` might describe taking the line, formatting it and
+     then using the formatted line to create another formatter that formats it some other way.
+     OR: it can be used to relate lines together. For example, given some sub-sequence `F[A]` representing
+     a previous line, i can `flatMap` it to create another formatter that formats the `NEXT` line in relation
+     that one.
    */
 
   trait Lexical[A] {
@@ -106,10 +276,6 @@ object Formatter {
 
   def widen[A](bla: Formatter[A])(f: Int => Int): Formatter[A] = fold[A, Formatter[A]](bla)(e => e.copy(width = f(e.width)))(m => m.copy(width = f(m.width)))
 
-  // I may have found a problem. By intending every line a number >= than the width, then it will never terminate, because the process always adds a new line
-  // and considers it in the formatting. This should be caught.
-  def indentLeft[A: Lexical](formatter: Formatter[A], n: Int): Formatter[A] = repeat(prepend(formatter, blank), n)
-
   def assimilate[A](formatter: Formatter[A], data: Vector[A]): Formatter[A] = continue(formatter)(_ ++ data)
 
   def fill[A: Lexical](formatter: Formatter[A], n: Int): Formatter[A] = {
@@ -126,9 +292,7 @@ object Formatter {
 
   @tailrec def evaluate[A: Lexical](formatter: Formatter[A]): (Vector[A], Int) = formatter match {
     case Every(data, f, width) => evaluate(More(data, f, width, 0, All))
-    case More(data, f, width, at, All) if at < data.size =>
-      val (start, end) = data.splitAt(at)
-      evaluate(More(start ++ consume(end, width)(f), f, width, at + width, All))
+    case More(data, f, width, at, All) if at < data.size => evaluate(More(data, f, width, 0, Few(formatter.totalLines)))
     case More(data, f, width, at, Few(i)) if at < data.size && i > 0 =>
       val (start, end) = data.splitAt(at)
       evaluate(More(start ++ consume(end, width)(f), f, width, at + width, Few(i - 1)))
@@ -140,8 +304,20 @@ object Formatter {
     (hyphenate(data, width), width)
   }
 
-  def evaluate1[A: Lexical](formatter: Formatter[A]): Vector[A] = evaluate(formatter)._1
+  def push[A: Lexical](formatter: Formatter[A], n: Int): Formatter[A] = formatter.prepend(blank).repeat(n)
 
+  def absorb[A: Lexical](absorber: Formatter[A], absorbee: Formatter[A]): Formatter[A] = {
+    val max = List(absorber.width, absorbee.width).max
+    absorber
+      .coeval
+      .assimilate(
+        absorbee.evaluate._1)
+      .ofWidth(max)
+  }
+
+  def absorbT[A: Lexical](absorber: Formatter[A], absorbee: Formatter[A]): Formatter[A] = absorb(absorber, absorbee).ofWidth(absorber.width + absorbee.width)
+
+  // This should describe what needs to happen, not actually do it
   def interleave[A: Lexical](f1: Formatter[A], f2: Formatter[A]): Formatter[A] = {
     val (left, lwidth) = f1.evaluate
     val (right, rwidth) = f2.evaluate
@@ -152,6 +328,8 @@ object Formatter {
       .toVector)
       .widen(_ => lwidth + rwidth)
   }
+
+  def empty[A: Lexical]: Formatter[A] = emptyN(1)
 
   def emptyN[A: Lexical](n: Int): Formatter[A] = {
     if (n <= 0) lift(Vector.empty[A])
@@ -197,7 +375,7 @@ object Formatter {
       case _ =>
         val current = rem.take(width)
         val n = if (current.size < width) 0 else 1
-        if (!isBlank(hyphenated.last) && !isCont(hyphenated.last) && !isBlank(current.head) ) {
+        if (!isBlank(hyphenated.last) && !isCont(hyphenated.last) && !isBlank(current.head)) {
           go(hyphenated
             .dropRight(1)
             .:+(continuation)
@@ -217,364 +395,58 @@ object Formatter {
       .toVector
   }
 
-  implicit class FormatterSyntax[A: Lexical](formatter: Formatter[A]) {
-    def continue(f: Vector[A] => Vector[A]): Formatter[A] = self.continue(formatter)(f)
+  object syntax {
 
-    def every: Formatter[A] = self.every(formatter)
+    implicit class FormatterSyntax[A: Lexical](formatter: Formatter[A]) {
+      def continue(f: Vector[A] => Vector[A]): Formatter[A] = self.continue(formatter)(f)
 
-    def one: Formatter[A] = self.one(formatter)
+      def every: Formatter[A] = self.every(formatter)
 
-    def indentLeft(n: Int): Formatter[A] = self.indentLeft(formatter, n)
+      def one: Formatter[A] = self.one(formatter)
 
-    def ofWidth(i: Int): Formatter[A] = self.widen(formatter)(_ => i)
+      def ofWidth(i: Int): Formatter[A] = self.widen(formatter)(_ => i)
 
-    def widen(f: Int => Int): Formatter[A] = self.widen(formatter)(f)
+      def widen(f: Int => Int): Formatter[A] = self.widen(formatter)(f)
 
-    def assimilate(v: Vector[A]): Formatter[A] = self.assimilate(formatter, v)
+      def assimilate(v: Vector[A]): Formatter[A] = self.assimilate(formatter, v)
 
-    def align(that: Formatter[A], distance: Int): Formatter[A] = self.align(formatter, that, distance: Int)
+      def align(that: Formatter[A], distance: Int): Formatter[A] = self.align(formatter, that, distance: Int)
 
-    def repeat(n: Int): Formatter[A] = self.repeat(formatter, n)
+      def repeat(n: Int): Formatter[A] = self.repeat(formatter, n)
 
-    def append(a: A): Formatter[A] = self.append(formatter, a)
+      def append(a: A): Formatter[A] = self.append(formatter, a)
 
-    def prepend(a: A): Formatter[A] = self.prepend(formatter, a)
+      def prepend(a: A): Formatter[A] = self.prepend(formatter, a)
 
-    def fill(n: Int): Formatter[A] = self.fill(formatter, n)
+      def fill(n: Int): Formatter[A] = self.fill(formatter, n)
 
-    def fillAll: Formatter[A] = self.fillAll(formatter)
+      def fillAll: Formatter[A] = self.fillAll(formatter)
 
-    def interleave(that: Formatter[A]): Formatter[A] = self.interleave(formatter, that)
+      def interleave(that: Formatter[A]): Formatter[A] = self.interleave(formatter, that)
 
-    def corun: Formatter[A] = lift(self.run(formatter))
+      def absorb(that: Formatter[A]): Formatter[A] = self.absorb(formatter, that)
 
-    def coeval: Formatter[A] = {
-      val (data, width) = evaluate
-      self.formatter(data).ofWidth(width)
+      def push(n: Int): Formatter[A] = self.push(formatter, n)
+
+      def coeval: Formatter[A] = {
+        val (data, width) = evaluate
+        self.formatter(data).ofWidth(width)
+      }
+
+      def coevalH: Formatter[A] = {
+        val (data, width) = evaluateH
+        self.formatter(data).ofWidth(width)
+      }
+
+      def absorbT(absorbee: Formatter[A]): Formatter[A] = self.absorbT(formatter, absorbee)
+
+      def evaluate: (Vector[A], Int) = self.evaluate(formatter)
+
+      def evaluateH: (Vector[A], Int) = self.evaluateH(formatter)
+
+      def run: Vector[A] = self.run(formatter)
     }
 
-    def coevalH: Formatter[A] = {
-      val (data, width) = evaluateH
-      self.formatter(data).ofWidth(width)
-    }
-
-    def evaluate1: Vector[A] = self.evaluate1(formatter)
-
-    def evaluate: (Vector[A], Int) = self.evaluate(formatter)
-
-    def evaluateH: (Vector[A], Int) = self.evaluateH(formatter)
-
-    def run: Vector[A] = self.run(formatter)
   }
 
 }
-
-//import core.Texer.Text
-//import Binary.treeSyntax
-//
-//object Man {
-//
-//  /**
-//    * For columns and rows, this gets a little bit more difficult.
-//    * I need to provide functions, which describe the
-//    * shape of the formatting, that I intend to use.
-//    * I then proceed to adapt the supplied text to this format by running the composition.
-//    *
-//    * Direct transformations on the text itself will not work that easily,
-//    * because formatting, in this case, flows from one text to the next.
-//    * I should be able to get away with it if I don't allow continuous text
-//    * manipulation. In that case, I can define the overall structure
-//    * of subsections of text and then proceed to combine them together
-//    * individually.
-//    *
-//    * The proper behaviour of this should've been something similar
-//    * to a descriptor of format. One defines the complete textual format
-//    * one wants and then feeds some text to this. This then proceeds
-//    * to apply the desired format to the text.
-//    *
-//    * I can however work on this in the next few days. This is
-//    * a rough draft.
-//    *
-//    * // Currently, columns can be made like so
-//    *
-//    * val opts = List("-r", "-a", "-c") map instance.lift
-//    * val descs = List("Desc for `-r`", "Desc for `-a`", "Desc for `-c`") map instance.lift
-//    *
-//    * (opts zip descs)
-//    * .map {
-//    * case (opt, desc) => List(opt).indent(2).append(List(desc).spacing(1).indent(5)).line
-//    * }
-//    * .fold(_ append _).make
-//    *
-//    * => creates expected
-//    * The ugly part of this is that I have to lift simple tokens into a list, in order to receive the `Text[_]` context
-//    * Some of these operations might also abstract to simpler combinators, which I can more transparently compose together
-//    * to create the columns. This should definitely be a priority.
-//    * For a rough version of this API, I think `line`, `indent`, `append`, `prepend` and `spacing` are sufficiently
-//    * powerful primitives for describing simple Man pages. After adding some more combinators for simplification,
-//    * this could do the trick for the first versions. This should however be improved upon.
-//    * There are a lot of other things that this should be able to do. One of the most important ones is laziness!
-//    *
-//    * === Man Page layout ===
-//    * -> Name
-//    *     - command name and short description
-//    * -> Synopsis
-//    *     - formal description of command usage
-//    * -> Description
-//    *     - textual description of the command function itself
-//    * -> [Options]
-//    *     - command options and their descriptions
-//    * -> Examples
-//    *     - examples of how to use the command
-//    * -> See also
-//    *     - commands related to this command
-//    *
-//    * => I currently can provide name, a synopsis and options
-//    * I sadly do not support additional information such as a description
-//    **/
-//
-//  // TODO: This has to be rewritten. I do not like it at all
-//  import Texer._
-//  import Texer.syntax._
-//
-//  val spacing = 1
-//  val colIndent = 7
-//  val colAlign = 10
-//  val lineSpace = 1
-//
-//  def liftString(text: String): Text[String] = (text split " " toList) map instance.lift
-//
-//  def row(items: Text[String]*)(f: Text[String] => Text[String]): Text[String] = {
-//    items
-//      .zipWithIndex
-//      .reduce { (l, r) =>
-//        (l._1.relIndent(f(r._1.spacing(spacing)))(colAlign * r._2), l._2)
-//      }
-//      ._1
-//      .indent(colIndent)
-//      .line
-//  }
-//
-//  def simpleRow(items: Text[String]*): Text[String] = row(items: _*)(identity)
-//
-//  def options(all: List[Tree[Sym]]): Text[String] = {
-//    all.flatMap {
-//      _
-//        .filterL(com => com.isNamed || com.isAssigned || com.isAlt)
-//        .flatMap {
-//          case Named(l, d) => simpleRow(liftString(l), liftString(d.description)).line
-//          case Assign(l, d) => simpleRow(liftString(l), liftString(d.description)).line
-//          case Alt(ths, tht, d) => simpleRow(liftString(s"$ths, $tht"), liftString(d.description)).line
-//          case _ => Nil
-//        }
-//    }
-//  }
-//
-//  def cmd(all: List[Tree[Sym]]): Text[String] = {
-//    all
-//      .filter(_.rootOf(_.isCommand))
-//      .map(_.rootOption.get)
-//      .distinct
-//      .map {
-//        case Com(a, d) => liftString(a)
-//        case _ => Nil
-//      }
-//      .head
-//  }
-//
-//  def synopsis(all: List[Tree[Sym]]): Text[String] = {
-//    val init = cmd(all)
-//    val sentinel = init map (_ => tex.blank)
-//    val sentients = init :: (0 until (all.size - 1)).map(_ => sentinel).toList
-//    (sentients zip all) flatMap {
-//      case (sent, tree) =>
-//        row(sent,
-//          tree.foldLeft(List.empty[Token[String]]) {
-//            case (lst, Com(l, _)) => lst
-//            case (lst, Named(l, _)) => lst append liftString(l)
-//            case (lst, Assign(l, _)) => lst append liftString(s"$l<param>")
-//            case (lst, Type(_)) => lst append liftString("<param>")
-//            case (lst, _) => lst
-//          })(_
-//          .prepend(liftString("["))
-//          .append(liftString("]")))
-//    }
-//  }
-//
-//  def name(all: List[Tree[Sym]]): Text[String] = {
-//    all
-//      .filter(_.rootOf(_.isCommand))
-//      .map(_.rootOption.get)
-//      .distinct
-//      .flatMap {
-//        case Com(a, d) => (liftString(a) append liftString(s" - ${d.description}").spacing(spacing)).indent(colIndent)
-//        case _ => Nil
-//      }
-//      .line
-//  }
-//
-//  def title(s: String): Text[String] = liftString(s).hspace(lineSpace)
-//
-//  def build(all: List[Tree[Sym]]): String =
-//    title("NAME")
-//      .append(name(all))
-//      .hspace(lineSpace)
-//      .append(title("SYNOPSIS"))
-//      .append(synopsis(all))
-//      .hspace(lineSpace)
-//      // .append(title("DESCRIPTION"))
-//      // .hspace(lineSpace)
-//      .append(title("OPTIONS"))
-//      .append(options(all))
-//      .make
-//
-//  def buildFor(all: List[Tree[Sym]], com: Sym): String = build(all.filter(_.rootOf(_ == com)))
-//
-//}
-//
-//
-//sealed trait Token[+A] {
-//  def isBlank: Boolean = this match {
-//    case BlankToken => true
-//    case _ => false
-//  }
-//
-//  def isNewLine: Boolean = this match {
-//    case NewLineToken => true
-//    case _ => false
-//  }
-//}
-//
-//case class WordToken[A](word: A) extends Token[A]
-//
-//case object BlankToken extends Token[Nothing]
-//
-//case object NewLineToken extends Token[Nothing]
-//
-//object Texer {
-//  type Text[A] = List[Token[A]]
-//
-//  val instance = new Texer[String] {
-//    override def zero: String = ""
-//
-//    override def size(t: String): Int = t.length
-//
-//    override def empty: String = " "
-//
-//    override def newline: String = "\n"
-//
-//    override def plus(a1: String, a2: String): String = a1 + a2
-//  }
-//
-//  val syntax = TexerSyntax(instance)
-//
-//}
-//
-//trait Texer[A] {
-//  self =>
-//
-//  val blank = BlankToken
-//  val newln = NewLineToken
-//
-//  def append(ts: Text[A], tht: Text[A]): Text[A] = tht ++ ts //this should shave any empty things from the right
-//
-//  def append(tk: Token[A], tht: Text[A]): Text[A] = tht :+ tk
-//
-//  def prepend(ts: Text[A], tht: Text[A]): Text[A] = ts ++ tht //this should shave any empty things from the left
-//
-//  def prepend(tk: Token[A], tht: Text[A]): Text[A] = tk :: tht
-//
-//  def lift(item: A): Token[A] = WordToken(item)
-//
-//  def shaveLeft(text: Text[A])(amount: Int): Text[A] = text drop amount
-//
-//  def shaveRight(text: Text[A])(amount: Int): Text[A] = text dropRight amount
-//
-//  def manyOf(t: Token[A], i: Int): Text[A] = Stream.continually(t) take i toList
-//
-//  //a law: tex.shaveL(tex.indent(_)(n))(_.isBlank) == _
-//  def shaveL(t: Text[A])(p: Token[A] => Boolean): Text[A] = t dropWhile p
-//
-//  def shaveR(t: Text[A])(p: Token[A] => Boolean): Text[A] = t.reverse dropWhile p reverse //this should be implemented better
-//
-//  def intersperse(t: Text[A])(tk: Token[A], interval: Int): Text[A] = partitioned(t)(interval).flatMap(l => append(tk, l))
-//
-//  def intersperse2(t: Text[A])(tks: Text[A], interval: Int): Text[A] = partitioned(t)(interval).flatMap(t => append(tks, t))
-//
-//  def colift(t: Token[A]): A = t match {
-//    case WordToken(a) => a
-//    case NewLineToken => newline
-//    case BlankToken => empty
-//  }
-//
-//  def partitioned(t: Text[A])(at: Int): List[Text[A]] = t grouped at toList
-//
-//  def indent(t: Text[A])(i: Int): Text[A] = prepend(manyOf(blank, i), t)
-//
-//  def shaveBoth(t: Text[A])(p: Token[A] => Boolean): Text[A] = shaveR(shaveL(t)(p))(p)
-//
-//  def length(t: Text[A]): Int = t.foldLeft(0)((a, b) => a + tokenSize(b))
-//
-//  def relIndent(ts: Text[A], tht: Text[A])(pos: Int): Text[A] = append(indent(tht)(pos - length(ts)), ts)
-//
-//  def spacing(t: Text[A])(i: Int): Text[A] = shaveBoth(intersperse2(t)(manyOf(blank, i), 1))(_.isBlank)
-//
-//  def line(t: Text[A]): Text[A] = append(newln, t)
-//
-//  def hspace(t: Text[A])(amount: Int): Text[A] = append(manyOf(newln, amount), t)
-//
-//  def liftT(t: A): Text[A] = List(lift(t))
-//
-//  //new lines should shave their left padding
-//  def lines(t: Text[A])(every: Int): Text[A] = {
-//    partitioned(t)(every)
-//      .map(shaveL(_)(_.isBlank))
-//      .flatMap(line)
-//  }
-//
-//  def make(t: Text[A]): A = {
-//    shaveR(t)(_.isNewLine)
-//      .map(colift)
-//      .fold(zero)((a1, a2) => plus(a1, a2))
-//  }
-//
-//  def tokenSize(a: Token[A]): Int = size(colift(a))
-//
-//  def plus(a1: A, a2: A): A
-//
-//  def size(t: A): Int
-//
-//  def zero: A
-//
-//  def empty: A
-//
-//  def newline: A
-//}
-//
-//case class TexerSyntax[A](tex: Texer[A]) {
-//  implicit def ops(t: Text[A]): TexerOps[A] = new TexerOps[A](t)(tex)
-//}
-//
-//final class TexerOps[A](t: Text[A])(implicit tex: Texer[A]) {
-//  def append(ts: Text[A]): Text[A] = tex.append(ts, t)
-//
-//  def prepend(ts: Text[A]): Text[A] = tex.prepend(ts, t)
-//
-//  def lines(every: Int): Text[A] = tex.lines(t)(every)
-//
-//  def line: Text[A] = tex.line(t)
-//
-//  def shaveR(f: Token[A] => Boolean): Text[A] = tex.shaveR(t)(f)
-//
-//  def spacing(by: Int): Text[A] = tex.spacing(t)(by)
-//
-//  def indent(by: Int): Text[A] = tex.indent(t)(by)
-//
-//  def hspace(by: Int): Text[A] = tex.hspace(t)(by)
-//
-//  def relIndent(t2: Text[A])(pos: Int) = tex.relIndent(t, t2)(pos)
-//
-//  def make: A = tex.make(t)
-//}
-//
-//
