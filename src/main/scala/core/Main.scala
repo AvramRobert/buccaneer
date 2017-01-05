@@ -57,8 +57,10 @@ object Main {
     //    val params5 = List("shift", "-a")
     //println(Interpreter.interpret(store).run(params4))
 
-
-    println(Man.help(store, List("add")).run(HelpConfig(150, 5, 5)))
+    Interpreter.
+      interpretH(store).
+      run(List("add", "--help")).
+      fold(_ => println("HELLO"))(println)
   }
 
 }

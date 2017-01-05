@@ -41,4 +41,5 @@ the operators used. For example: add - option("a") <- argument[Int] <- argument[
 
 
 =====================
-This should then essentially do it for the MAN page API. I then only need integrate it with the interpreter.
+It might be quite a good idea to let people configure their own MAN pages. Structure for help and such.
+And more specifically, perhaps the commands that bring up help and suggestions.

@@ -6,8 +6,21 @@ import Validators._
 import core.Store.MapT
 import Store._
 import Binary.treeSyntax
+import core.Man.HelpConfig
 import core.Read._
+
 import scalaz.syntax.applicative._
+
+sealed trait Phase[A] {
+  def fold[B](f: Result[A] => B)(g: String => B): B = this match {
+    case Interpretation(r) => f(r)
+    case Meta(a) => g(a)
+  }
+}
+
+case class Interpretation[A](result: Result[A]) extends Phase[A]
+
+case class Meta[A](data: String) extends Phase[A]
 
 //TODO: Can't I generalise this? Or should'nt I generalise this?
 object Interpreter {
@@ -27,9 +40,25 @@ object Interpreter {
 
   def step[A, B](f: A => Result[B]): Step[A, B] = Kleisli[Result, A, B](f)
 
+  def phase[A, B](f: A => Phase[B]) = Kleisli[Phase, A, B](f)
+
   def interpret[A](cli: Cli[A]): Step[List[String], A] = interpret(cli.store)
 
   def interpret[A](store: Store[Store.MapT, A]): Step[List[String], A] = resolve(store.keySet) andThen runFrom(store)
+
+  def interpretH[A](store: Store[Store.MapT, A], helpConfig: HelpConfig = HelpConfig(150, 5, 5)) = {
+    lazy val help = Man.helper(store, helpConfig)
+    lazy val suggest = Man.suggester(store, helpConfig)
+    phase { (input: List[String]) =>
+      input match {
+        case args if args.last == "--help" => Meta[A](help(input.dropRight(1)))
+        case args if args.last == "--sgst" => Meta[A](suggest(input.dropRight(1)))
+        case _ => Interpretation[A] {
+          interpret(store).run(input)
+        }
+      }
+    }
+  }
 
   def interpret[A](command: Cmd[A]): Step[List[String], A] = step { input =>
     val x = command.syntax zipL input
@@ -82,21 +111,19 @@ object Interpreter {
 }
 
 object Validators {
-  def syntax(assoc: (Denot, String)) = assoc._1 match {
-    case Identifier(symbol, _, _) => symbol.find(_ == assoc._2) match {
-      case Some(_) => assoc.successNel
-      case None => new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${symbol.show}").failureNel
-    }
-    case TypedIdentifier(symbol, _, _) => symbol.find(v => assoc._2 startsWith v) match {
-      case Some(_) => assoc.successNel
-      case None => new Throwable(s"Prefix of `${assoc._2}` does not match the expected prefix of ${symbol.show}<value>").failureNel
-    }
-    case _ => assoc.successNel
-  }
 
-  def types(assoc: (Denot, String)) = assoc._1 match {
-    case Typing(proof, _) => proof(assoc._2).map(_ => assoc)
-    case TypedIdentifier(_, proof, _) => proof(assoc._2).map(_ => assoc)
+  def syntax(assoc: (Denot, String)) = (assoc match {
+    case (Identifier(symbol, _, _), input) => symbol.find(_ == input)
+    case (TypedIdentifier(symbol, _, _), input) => symbol.find(v => input startsWith v)
+    case _ => Some(Label(""))
+  }).fold {
+    new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${assoc._1.show}").failureNel[(Denot, String)]
+  } { _ => assoc.successNel }
+
+
+  def types(assoc: (Denot, String)) = assoc match {
+    case (Typing(proof, _), input) => proof(input).map(_ => assoc)
+    case (TypedIdentifier(_, proof, _), input) => proof(input).map(_ => assoc)
     case _ => assoc.successNel
   }
 }
