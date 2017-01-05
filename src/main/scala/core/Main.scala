@@ -1,7 +1,6 @@
 package core
 
 import Implicits._
-import Formatter.syntax._
 import Binary.treeSyntax
 import Store._
 import core.Man.HelpConfig

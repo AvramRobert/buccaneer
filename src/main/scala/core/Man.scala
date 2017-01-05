@@ -1,12 +1,11 @@
 package core
 
-import Formatter.{Formatter, Lexical, lift}
-import Formatter.syntax._
+import Formatter.Formatter
 import Binary.treeSyntax
 import core.Store._
 import scalaz.syntax.traverse._
 import scala.annotation.tailrec
-import scalaz.{Applicative, Reader, Traverse}
+import scalaz.Reader
 
 
 object Man {
@@ -15,29 +14,11 @@ object Man {
 
   type Section[A] = Reader[HelpConfig, A]
 
-  implicit val traverseVector: Traverse[Vector] = new Traverse[Vector] {
-    override def traverseImpl[G[_], A, B](fa: Vector[A])(f: (A) => G[B])(implicit ap: Applicative[G]): G[Vector[B]] = {
-      fa.foldLeft(ap.point(Vector[B]())) { (gvb, a) =>
-        ap.apply2(gvb, f(a))(_ :+ _)
-      }
-    }
-  }
-
-  implicit val lexicalChar: Lexical[Char] = new Lexical[Char] {
-    override def blank = ' '
-
-    override def break = '\n'
-
-    override def continuation = '-'
-
-    override def eq(a1: Char, a2: Char) = a1 == a2
-  }
-
   def section[A](f: HelpConfig => A): Section[A] = Reader(f)
 
   def emptySection: Section[Formatter[Char]] = section(_ => Formatter.empty[Char])
 
-  def text(s: String): Formatter[Char] = lift(s.toCharArray.toVector)
+  def text(s: String): Formatter[Char] = Formatter(s.toCharArray.toVector)
 
   def line(txt: String)(fsize: HelpConfig => Int): Section[Formatter[Char]] = section { config =>
     text(txt).
@@ -175,8 +156,23 @@ object Man {
   }
 }
 
+trait Lexical[A] {
+  def blank: A
+
+  def break: A
+
+  def continuation: A
+
+  def eq(a1: A, a2: A): Boolean
+
+  def isBlank(a: A): Boolean = eq(a, blank)
+
+  def isCont(a: A): Boolean = eq(a, continuation)
+}
+
 object Formatter {
-  self =>
+
+  type Format[A] = Vector[A] => Vector[A]
 
   /*
   Notes for improvements:
@@ -195,21 +191,9 @@ object Formatter {
      that one.
    */
 
-  trait Lexical[A] {
-    def blank: A
+  def apply[A: Lexical](data: Vector[A]): Formatter[A] = More(data, identity, data.size, 0, Few(1))
 
-    def break: A
-
-    def continuation: A
-
-    def eq(a1: A, a2: A): Boolean
-
-    def isBlank(a: A): Boolean = eq(a, blank)
-
-    def isCont(a: A): Boolean = eq(a, continuation)
-  }
-
-  type VRead[A] = Vector[A] => Vector[A]
+  def empty[A](implicit lexical: Lexical[A]): Formatter[A] = Formatter(Vector(lexical.blank))
 
   sealed trait Card
 
@@ -227,226 +211,180 @@ object Formatter {
     def breadth: Int = data.size
 
     def totalLines: Int = Math.ceil(breadth.toDouble / width.toDouble).toInt
-  }
-
-  case class Every[A](data: Vector[A], f: Vector[A] => Vector[A], width: Int) extends Formatter[A]
-
-  case class More[A](data: Vector[A], f: Vector[A] => Vector[A], width: Int, at: Int, n: Card) extends Formatter[A]
 
 
-  def blank[A](implicit lexical: Lexical[A]): A = lexical.blank
+    def blank(implicit lexical: Lexical[A]): A = lexical.blank
 
-  def break[A](implicit lexical: Lexical[A]): A = lexical.break
+    def break(implicit lexical: Lexical[A]): A = lexical.break
 
-  def continuation[A](implicit lexical: Lexical[A]): A = lexical.continuation
+    def continuation(implicit lexical: Lexical[A]): A = lexical.continuation
 
-  def isBlank[A](a: A)(implicit lexical: Lexical[A]): Boolean = lexical.isBlank(a)
+    def isBlank(a: A)(implicit lexical: Lexical[A]): Boolean = lexical.isBlank(a)
 
-  def isCont[A](a: A)(implicit lexical: Lexical[A]): Boolean = lexical.isCont(a)
+    def isCont(a: A)(implicit lexical: Lexical[A]): Boolean = lexical.isCont(a)
 
-  def lift[A](data: Vector[A]): Formatter[A] = formatter(data)
 
-  def formatter[A](data: Vector[A]): Formatter[A] = More(data, identity, data.size, 0, Few(1))
-
-  def fold[A, B](formatter: Formatter[A])(f: Every[A] => B)(g: More[A] => B): B = formatter match {
-    case every@Every(_, _, _) => f(every)
-    case more@More(_, _, _, _, _) => g(more)
-  }
-
-  def endo[A](formatter: Formatter[A])(f: VRead[A] => VRead[A]): Formatter[A] = fold[A, Formatter[A]](formatter)(e => e.copy(f = f(e.f)))(m => m.copy(f = f(m.f)))
-
-  def continue[A](formatter: Formatter[A])(f: Vector[A] => Vector[A]): Formatter[A] = endo(formatter)(_ andThen f)
-
-  def prepend[A](formatter: Formatter[A], a: A): Formatter[A] = continue(formatter)(v => a +: v)
-
-  def append[A](formatter: Formatter[A], a: A): Formatter[A] = continue(formatter)(_ :+ a)
-
-  def every[A](formatter: Formatter[A]): Formatter[A] = fold(formatter)(identity)(x => Every(x.data, x.f, x.width))
-
-  def one[A](formatter: Formatter[A]): Formatter[A] = fold(formatter)(e => More(e.data, e.f, e.width, 0, Few(1)))(m => More(m.data, m.f, m.width, m.at, Few(1)))
-
-  def repeat[A](formatter: Formatter[A], amount: Int): Formatter[A] = {
-    @tailrec def go(v: Vector[A], f: Vector[A] => Vector[A], n: Int): Vector[A] = {
-      if (n <= 0) v
-      else go(f(v), f, n - 1)
+    def fold[B](f: Every[A] => B)(g: More[A] => B): B = this match {
+      case every@Every(_, _, _) => f(every)
+      case more@More(_, _, _, _, _) => g(more)
     }
 
-    endo(formatter)(f => (v: Vector[A]) => go(v, f, amount))
-  }
+    def endo(f: Format[A] => Format[A]): Formatter[A] = fold[Formatter[A]](e => e.copy(f = f(e.f)))(m => m.copy(f = f(m.f)))
 
-  def widen[A](bla: Formatter[A])(f: Int => Int): Formatter[A] = fold[A, Formatter[A]](bla)(e => e.copy(width = f(e.width)))(m => m.copy(width = f(m.width)))
+    def continue(f: Format[A]): Formatter[A] = endo(_ andThen f)
 
-  def assimilate[A](formatter: Formatter[A], data: Vector[A]): Formatter[A] = continue(formatter)(_ ++ data)
+    def prepend(a: A): Formatter[A] = continue(v => a +: v)
 
-  def fill[A: Lexical](formatter: Formatter[A], n: Int): Formatter[A] = {
-    val (data, width) = formatter.evaluate
-    lift(data ++ (0 until n).map(_ => blank).toVector).ofWidth(width)
-  }
+    def append(a: A): Formatter[A] = continue(_ :+ a)
 
+    def every: Formatter[A] = fold(identity)(x => Every(x.data, x.f, x.width))
 
-  @tailrec def fillAll[A: Lexical](formatter: Formatter[A]): Formatter[A] = {
-    val n = formatter.breadth % formatter.width
-    if (n != 0) fillAll(fill(formatter, 1))
-    else formatter
-  }
+    def one: Formatter[A] = fold(e => More(e.data, e.f, e.width, 0, Few(1)))(m => More(m.data, m.f, m.width, m.at, Few(1)))
 
-  @tailrec def evaluate[A: Lexical](formatter: Formatter[A]): (Vector[A], Int) = formatter match {
-    case Every(data, f, width) => evaluate(More(data, f, width, 0, All))
-    case More(data, f, width, at, All) if at < data.size => evaluate(More(data, f, width, 0, Few(formatter.totalLines)))
-    case More(data, f, width, at, Few(i)) if at < data.size && i > 0 =>
-      val (start, end) = data.splitAt(at)
-      evaluate(More(start ++ consume(end, width)(f), f, width, at + width, Few(i - 1)))
-    case More(data, _, width, _, _) => (data, width)
-  }
-
-  def evaluateH[A: Lexical](formatter: Formatter[A]): (Vector[A], Int) = {
-    val (data, width) = evaluate(formatter)
-    (hyphenate(data, width), width)
-  }
-
-  def push[A: Lexical](formatter: Formatter[A], n: Int): Formatter[A] = formatter.prepend(blank).repeat(n)
-
-  def absorb[A: Lexical](absorber: Formatter[A], absorbee: Formatter[A]): Formatter[A] = {
-    val max = List(absorber.width, absorbee.width).max
-    absorber
-      .coeval
-      .assimilate(
-        absorbee.evaluate._1)
-      .ofWidth(max)
-  }
-
-  def absorbT[A: Lexical](absorber: Formatter[A], absorbee: Formatter[A]): Formatter[A] = absorb(absorber, absorbee).ofWidth(absorber.width + absorbee.width)
-
-  // This should describe what needs to happen, not actually do it
-  def interleave[A: Lexical](f1: Formatter[A], f2: Formatter[A]): Formatter[A] = {
-    val (left, lwidth) = f1.evaluate
-    val (right, rwidth) = f2.evaluate
-
-    lift(left.grouped(lwidth)
-      .zip(right.grouped(rwidth))
-      .flatMap(v => v._1 ++ v._2)
-      .toVector)
-      .widen(_ => lwidth + rwidth)
-  }
-
-  def empty[A: Lexical]: Formatter[A] = emptyN(1)
-
-  def emptyN[A: Lexical](n: Int): Formatter[A] = {
-    if (n <= 0) lift(Vector.empty[A])
-    lift(Vector(blank)).prepend(blank).repeat(n - 1)
-  }
-
-  def normalise[A: Lexical](f1: Formatter[A], f2: Formatter[A]): (Formatter[A], Formatter[A]) = {
-    def pad(larger: Formatter[A], smaller: Formatter[A]) = {
-      val amount = (larger.totalLines * smaller.width) - smaller.breadth
-      (larger.fillAll, smaller.fill(amount))
-    }
-
-    if (f1.totalLines >= f2.totalLines) pad(f1, f2)
-    else pad(f2, f1).swap
-  }
-
-  def align[A: Lexical](f1: Formatter[A], f2: Formatter[A], distance: Int): Formatter[A] = {
-    val (nf1, nf2) = normalise(f1, f2)
-    val empty = emptyN(nf1.totalLines * distance).ofWidth(distance)
-    nf1.coevalH interleave empty interleave nf2.coevalH
-  }
-
-  def run[A: Lexical](formatter: Formatter[A]): Vector[A] = evaluateH(formatter) match {
-    case (data, width) => format(data, width)
-  }
-
-  def consume[A: Lexical](v: Vector[A], width: Int)(f: VRead[A]): Vector[A] = f(v.take(width)) ++ v.drop(width)
-
-  /*
-   // Almost works properly.. if however something like the following occurs:
-        Hello my n
-        ame is Robert.
-
-        That becomes this:
-
-        Hello my -
-        name is Robert
-   */
-  def hyphenate[A: Lexical](v: Vector[A], width: Int) = {
-    @tailrec def go(hyphenated: Vector[A], rem: Vector[A]): Vector[A] = rem match {
-      case _ if rem.isEmpty => hyphenated
-      case _ if hyphenated.isEmpty => go(rem.take(width), rem.drop(width))
-      case _ =>
-        val current = rem.take(width)
-        val n = if (current.size < width) 0 else 1
-        if (!isBlank(hyphenated.last) && !isCont(hyphenated.last) && !isBlank(current.head)) {
-          go(hyphenated
-            .dropRight(1)
-            .:+(continuation)
-            .++(hyphenated.last +: current)
-            .dropRight(n), rem.drop(width - n))
-        }
-        else go(hyphenated ++ current, rem.drop(width))
-    }
-
-    go(Vector(), v)
-  }
-
-  def format[A: Lexical](input: Vector[A], width: Int): Vector[A] = {
-    input
-      .grouped(width)
-      .flatMap(_ :+ break)
-      .toVector
-  }
-
-  object syntax {
-
-    implicit class FormatterSyntax[A: Lexical](formatter: Formatter[A]) {
-      def continue(f: Vector[A] => Vector[A]): Formatter[A] = self.continue(formatter)(f)
-
-      def every: Formatter[A] = self.every(formatter)
-
-      def one: Formatter[A] = self.one(formatter)
-
-      def ofWidth(i: Int): Formatter[A] = self.widen(formatter)(_ => i)
-
-      def widen(f: Int => Int): Formatter[A] = self.widen(formatter)(f)
-
-      def assimilate(v: Vector[A]): Formatter[A] = self.assimilate(formatter, v)
-
-      def align(that: Formatter[A], distance: Int): Formatter[A] = self.align(formatter, that, distance: Int)
-
-      def repeat(n: Int): Formatter[A] = self.repeat(formatter, n)
-
-      def append(a: A): Formatter[A] = self.append(formatter, a)
-
-      def prepend(a: A): Formatter[A] = self.prepend(formatter, a)
-
-      def fill(n: Int): Formatter[A] = self.fill(formatter, n)
-
-      def fillAll: Formatter[A] = self.fillAll(formatter)
-
-      def interleave(that: Formatter[A]): Formatter[A] = self.interleave(formatter, that)
-
-      def absorb(that: Formatter[A]): Formatter[A] = self.absorb(formatter, that)
-
-      def push(n: Int): Formatter[A] = self.push(formatter, n)
-
-      def coeval: Formatter[A] = {
-        val (data, width) = evaluate
-        self.formatter(data).ofWidth(width)
+    def repeat(amount: Int): Formatter[A] = {
+      @tailrec def go(v: Vector[A], f: Format[A], n: Int): Vector[A] = {
+        if (n <= 0) v
+        else go(f(v), f, n - 1)
       }
 
-      def coevalH: Formatter[A] = {
-        val (data, width) = evaluateH
-        self.formatter(data).ofWidth(width)
-      }
-
-      def absorbT(absorbee: Formatter[A]): Formatter[A] = self.absorbT(formatter, absorbee)
-
-      def evaluate: (Vector[A], Int) = self.evaluate(formatter)
-
-      def evaluateH: (Vector[A], Int) = self.evaluateH(formatter)
-
-      def run: Vector[A] = self.run(formatter)
+      endo(f => (v: Vector[A]) => go(v, f, amount))
     }
 
+    def widen(f: Int => Int): Formatter[A] = fold[Formatter[A]](e => e.copy(width = f(e.width)))(m => m.copy(width = f(m.width)))
+
+    def assimilate(data: Vector[A]): Formatter[A] = continue(_ ++ data)
+
+    def fill(n: Int)(implicit lexical: Lexical[A]): Formatter[A] = {
+      val (data, width) = evaluate
+      Formatter(data ++ (0 until n).map(_ => blank).toVector).ofWidth(width)
+    }
+
+    @tailrec final def fillAll(implicit lexical: Lexical[A]): Formatter[A] = {
+      val n = breadth % width
+      if (n != 0) fill(1).fillAll
+      else this
+    }
+
+    @tailrec private def safeEval(formatter: Formatter[A])(implicit lexical: Lexical[A]): (Vector[A], Int) = formatter match {
+      case Every(data, f, width) => safeEval(More(data, f, width, 0, All))
+      case More(data, f, width, at, All) if at < data.size => safeEval(More(data, f, width, 0, Few(totalLines)))
+      case More(data, f, width, at, Few(i)) if at < data.size && i > 0 =>
+        val (start, end) = data.splitAt(at)
+        safeEval(More(start ++ consume(end, width)(f), f, width, at + width, Few(i - 1)))
+      case More(data, _, width, _, _) => (data, width)
+    }
+
+    def evaluate(implicit lexical: Lexical[A]): (Vector[A], Int) = safeEval(this)
+
+    def evaluateH(implicit lexical: Lexical[A]): (Vector[A], Int) = {
+      val (data, width) = evaluate
+      (hyphenate(data, width), width)
+    }
+
+    def push(n: Int)(implicit lexical: Lexical[A]): Formatter[A] = prepend(blank).repeat(n)
+
+    def absorb(absorbee: Formatter[A])(implicit lexical: Lexical[A]): Formatter[A] = {
+      val max = List(width, absorbee.width).max
+      coeval
+        .assimilate(
+          absorbee.evaluate._1)
+        .ofWidth(max)
+    }
+
+    def absorbT(absorbee: Formatter[A])(implicit lexical: Lexical[A]): Formatter[A] = absorb(absorbee).ofWidth(width + absorbee.width)
+
+    // This should describe what needs to happen, not actually do it
+    def interleave(f2: Formatter[A])(implicit lexical: Lexical[A]): Formatter[A] = {
+      val (left, lwidth) = evaluate
+      val (right, rwidth) = f2.evaluate
+
+      Formatter(left.grouped(lwidth)
+        .zip(right.grouped(rwidth))
+        .flatMap(v => v._1 ++ v._2)
+        .toVector)
+        .widen(_ => lwidth + rwidth)
+    }
+
+    def emptyN(n: Int)(implicit lexical: Lexical[A]): Formatter[A] = {
+      if (n <= 0) Formatter.empty[A]
+      Formatter(Vector(blank)).prepend(blank).repeat(n - 1)
+    }
+
+    def normalise(f2: Formatter[A])(implicit lexical: Lexical[A]): (Formatter[A], Formatter[A]) = {
+      def pad(larger: Formatter[A], smaller: Formatter[A]) = {
+        val amount = (larger.totalLines * smaller.width) - smaller.breadth
+        (larger.fillAll, smaller.fill(amount))
+      }
+
+      if (totalLines >= f2.totalLines) pad(this, f2)
+      else pad(f2, this).swap
+    }
+
+    def align(f2: Formatter[A], distance: Int)(implicit lexical: Lexical[A]): Formatter[A] = {
+      val (nf1, nf2) = normalise(f2)
+      val empty = emptyN(nf1.totalLines * distance).ofWidth(distance)
+      nf1.coevalH interleave empty interleave nf2.coevalH
+    }
+
+    def ofWidth(i: Int): Formatter[A] = widen(_ => i)
+
+    def run(implicit lexical: Lexical[A]): Vector[A] = evaluateH match {
+      case (data, width) => format(data, width)
+    }
+
+    def consume(v: Vector[A], width: Int)(f: Format[A]): Vector[A] = f(v.take(width)) ++ v.drop(width)
+
+    /*
+     // Almost works properly.. if however something like the following occurs:
+          Hello my n
+          ame is Robert.
+
+          That becomes this:
+
+          Hello my -
+          name is Robert
+     */
+    def hyphenate(v: Vector[A], width: Int)(implicit lexical: Lexical[A]) = {
+      @tailrec def go(hyphenated: Vector[A], rem: Vector[A]): Vector[A] = rem match {
+        case _ if rem.isEmpty => hyphenated
+        case _ if hyphenated.isEmpty => go(rem.take(width), rem.drop(width))
+        case _ =>
+          val current = rem.take(width)
+          val n = if (current.size < width) 0 else 1
+          if (!isBlank(hyphenated.last) && !isCont(hyphenated.last) && !isBlank(current.head)) {
+            go(hyphenated
+              .dropRight(1)
+              .:+(continuation)
+              .++(hyphenated.last +: current)
+              .dropRight(n), rem.drop(width - n))
+          }
+          else go(hyphenated ++ current, rem.drop(width))
+      }
+
+      go(Vector(), v)
+    }
+
+    def coeval(implicit lexical: Lexical[A]): Formatter[A] = {
+      val (data, width) = evaluate
+      Formatter(data).ofWidth(width)
+    }
+
+    def coevalH(implicit lexical: Lexical[A]): Formatter[A] = {
+      val (data, width) = evaluateH
+      Formatter(data).ofWidth(width)
+    }
+
+
+    def format(input: Vector[A], width: Int)(implicit lexical: Lexical[A]): Vector[A] = {
+      input
+        .grouped(width)
+        .flatMap(_ :+ break)
+        .toVector
+    }
   }
+
+  case class Every[A](data: Vector[A], f: Format[A], width: Int) extends Formatter[A]
+
+  case class More[A](data: Vector[A], f: Format[A], width: Int, at: Int, n: Card) extends Formatter[A]
 
 }

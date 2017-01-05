@@ -1,8 +1,6 @@
 package core
 
-import core.Formatter.Lexical
 import core.Read.Result
-
 import scala.collection.generic.CanBuildFrom
 import scalaz.syntax.validation._
 import scalaz.syntax.applicative._
@@ -29,16 +27,5 @@ object Implicits {
         (builder |@| proof(value))(_ += _)
       }
       .map(_.result())
-  }
-
-  implicit val charLexical: Lexical[Char] = new Lexical[Char] {
-
-    override def blank = ' '
-
-    override def break = '\n'
-
-    override def continuation = '-'
-
-    override def eq(a1: Char, a2: Char) = a1 == a2
   }
 }

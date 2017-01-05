@@ -41,9 +41,4 @@ the operators used. For example: add - option("a") <- argument[Int] <- argument[
 
 
 =====================
-Move the implicit things only I use to a package object. This implies the lexical for the formatters and the traverse instance for vector.
-Make sure that you also refactor the functions for `Formatter`, as the lexicals required by them will then clash with the implicit value in the package object.
-(even though they require a `Lexical[A]` and not the concrete `Lexical[Char]`. Perhaps may perhaps be a problem of the context boundary.
-I haven't checked to see if the behaviour persists if I explicitly say that I want an implicit val of a lexical.
-
 This should then essentially do it for the MAN page API. I then only need integrate it with the interpreter.
