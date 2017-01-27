@@ -59,8 +59,8 @@ object Main {
 
     Interpreter.
       interpretH(store).
-      run(List("add", "--help")).
-      fold(_ => println("HELLO"))(println)
+      run(List("add", "1", "--help")).
+      fold(_ => println(""))(println)
   }
 
 }

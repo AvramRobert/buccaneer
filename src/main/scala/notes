@@ -33,7 +33,7 @@ the operators used. For example: add - option("a") <- argument[Int] <- argument[
 
 === To implement ===
 1. Command component descriptions // done
-2. Man page API
+2. Man page API // done
 3. CLI DSL
 4. Partial refactoring
 5. Tests
