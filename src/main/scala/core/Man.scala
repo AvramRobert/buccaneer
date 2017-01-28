@@ -135,9 +135,47 @@ object Man {
         text("Hint: You can call `--sgst` at any point to receive a list of all possible commands that match your current input."))
   }
 
+  def help2[A](input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = for {
+    matched <- section(_ => corresponding.toVector)
+    zipped = matched.map(_ zips input)
+    first = zipped.map(_.takeWhile(_._2.isDefined).map(_._1))
+    rest = zipped.map(_.dropWhile(_._2.isDefined).map(_._1))
+    commandSection <- first.headOption.fold(emptySection)(command)
+    usageSection <- usage(matched)
+    optionsSection <- options(rest)
+    subcommandSection <- subcommands(rest)
+    linebreak = Formatter.empty[Char]
+  } yield makeText {
+    (text("NAME") +:
+      commandSection +:
+      linebreak +:
+      text("USAGE") +:
+      whenEmpty(usageSection)("No usage information available.")) ++
+      (linebreak +:
+        text("OPTIONS") +:
+        whenEmpty(optionsSection)("There are no options available.")) ++
+      (linebreak +:
+        text("COMMANDS") +:
+        whenEmpty(subcommandSection)("There are no commands available.") :+
+        linebreak :+
+        text("Hint: You can call `--sgst` at any point to receive a list of all possible commands that match your current input."))
+  }
+
   def suggest[A](store: Store[MapT, A], input: List[String]): Section[String] = section { _ =>
     makeText {
       Interpreter.partialMatch(store.keySet, input).
+        map { tree =>
+          text((tree zips input).string(" ") {
+            case (_, Some(v)) => v
+            case (denot, _) => denot.show
+          })
+        }
+    }
+  }
+
+  def suggest2[A](input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = section { _ =>
+    makeText {
+      corresponding.
         map { tree =>
           text((tree zips input).string(" ") {
             case (_, Some(v)) => v

@@ -11,18 +11,26 @@ import core.Read._
 
 import scalaz.syntax.applicative._
 
-sealed trait Phase[A] {
-  def fold[B](f: Result[A] => B)(g: String => B): B = this match {
-    case Interpretation(r) => f(r)
-    case Meta(a) => g(a)
+sealed trait Interpret[+A] {
+  def fold[B]
+  (failure: List[Throwable] => B)
+  (data: A => B)
+  (metaData: String => B): B = this match {
+    case Fail(errors) => failure(errors)
+    case Data(get) => data(get)
+    case MetaData(get) => metaData(get)
   }
+
 }
 
-case class Interpretation[A](result: Result[A]) extends Phase[A]
+case class Fail(errors: List[Throwable]) extends Interpret[Nothing]
 
-case class Meta[A](data: String) extends Phase[A]
+case class Data[A](get: A) extends Interpret[A]
+
+case class MetaData(get: String) extends Interpret[Nothing]
 
 //TODO: Can't I generalise this? Or should'nt I generalise this?
+//TODO: Make everything return an `Interpret` -> I may be able to simplify this a bit that way
 object Interpreter {
   type Step[A, B] = Kleisli[Result, A, B]
   type IAST = Tree[(Denot, String)] // interpolated abstract syntax tree
@@ -38,34 +46,38 @@ object Interpreter {
         }
     }
 
+  def interpretation[A, B](f: A => Interpret[B]): Kleisli[Interpret, A, B] = Kleisli(f)
+
   def step[A, B](f: A => Result[B]): Step[A, B] = Kleisli[Result, A, B](f)
 
-  def phase[A, B](f: A => Phase[B]) = Kleisli[Phase, A, B](f)
+  def interpret[A](store: Store[Store.MapT, A]) = resolve(store.keySet) andThen runFrom(store)
 
-  def interpret[A](cli: Cli[A]): Step[List[String], A] = interpret(cli.store)
-
-  def interpret[A](store: Store[Store.MapT, A]): Step[List[String], A] = resolve(store.keySet) andThen runFrom(store)
-
-  def interpretH[A](store: Store[Store.MapT, A], helpConfig: HelpConfig = HelpConfig(150, 5, 5)) = {
-    lazy val help = Man.helper(store, helpConfig)
-    lazy val suggest = Man.suggester(store, helpConfig)
-    phase { (input: List[String]) =>
-      input match {
-        case args if args.last == "--help" => Meta[A](help(input.dropRight(1)))
-        case args if args.last == "--sgst" => Meta[A](suggest(input.dropRight(1)))
-        case _ => Interpretation[A] {
-          interpret(store).run(input)
-        }
+  //TODO: Make better
+  def interpretH[A](store: Store[Store.MapT, A], helpConfig: HelpConfig = HelpConfig(150, 5, 5)) = interpretation { (input: List[String]) =>
+    input.last match {
+      case "-help" | "--help" => partialMatch(store.keySet, input.dropRight(1)) match {
+        case set if set.isEmpty => Fail(List(new Throwable("Could not find any command matching that input")))
+        case set => MetaData(Man.help2(input.dropRight(1), set).run(helpConfig))
       }
+      case "-sgst" | "--sgst" =>
+        partialMatch(store.keySet, input.dropRight(1)) match {
+          case set if set.isEmpty => Fail(List(new Throwable("Could not find any command matching that input")))
+          case set => MetaData(Man.suggest2(input.dropRight(1), set).run(helpConfig))
+        }
+      case _ =>
+        interpret(store).
+          run(input).
+          fold(errors => Fail(errors.list), x => Data(x))
     }
   }
 
   def interpret[A](command: Cmd[A]): Step[List[String], A] = step { input =>
-    val x = command.syntax zipL input
-
-    (x.validate(syntax) |@| x.validate(types) |@| run(command, x)) {
-      (_, _, a) => a
-    }
+    for {
+      tree <- (command.syntax zipL input).successNel
+      _ <- tree.validate(syntax)
+      _ <- tree.validate(types)
+      output <- run(command, tree)
+    } yield output
   }
 
   def resolve(keySet: Set[Tree[Denot]]) =

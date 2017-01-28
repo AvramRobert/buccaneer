@@ -5,39 +5,12 @@ Because commands are binary trees, can't I use a huffman encoding to serialise t
 2.
 I may perhaps not really need `Tree`. Everything implemented so far is actually pretty linear.
 
-3.
-The current command builder is quite bulky and does not allow for much flexibility in actually expanding commands at various points in the structure.
-Experiment with the following idea:
-Let commands be defined syntactically with infix operators and let this implicitly dictate their positionality. For example:
-
-val add = command("add").msg("The add command")
-val rec = option("-r").msg("Performs operation recursively")
-val a = argument[Int: Read].msg("First argument")
-val b = argument[Int: Read].msg("Second argument")
-val f = (a: Int, b: Int) => a + b
-
-(add - rec - a - b).apply(f)
-
-(add - a - b).apply(f)
-
-or inlined
-
-add.
-  -(option("-a").msg("Some thing a")).
-  -(a).
-  -(b).
-  apply(f)
-
-This would effectively allow COMPLETE reuse of components and would also allow me to control relativity based on
-the operators used. For example: add - option("a") <- argument[Int] <- argument[Int]
-
 === To implement ===
 1. Command component descriptions // done
 2. Man page API // done
-3. CLI DSL
-4. Partial refactoring
-5. Tests
-6. Documentation
+3. Partial refactoring
+4. Tests
+5. Documentation
 
 
 =====================

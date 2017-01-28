@@ -1,66 +1,47 @@
 package core
 
 import Implicits._
-import Binary.treeSyntax
 import Store._
-import core.Man.HelpConfig
 
 object Main {
   def main(args: Array[String]) = {
-    val add = Command("add").msg("Add command")
-    val shift = Command("shift")
+    import Command._
 
-    val addUnnamed =
-      add
-        .argument[Int].msg("First argumentaksdkjadkjashkjsksjdaskjasdnksadksajnaskdskadjas")
-        .argument[Int].msg("Second argument")
-        .apply(_ + _)
 
-    val addUnnamedRec =
-      add.
-        option("-r").
-        argument[Int].msg("First argumentaksdkjadkjashkjsksjdaskjasdnksadksajnaskdskadjas").
-        argument[Int].msg("Second argument").
-        apply(_ + _)
+    val add = command("add").msg("The add command")
+    val shift = command("shift").msg("The shift command")
+    val left = command("left").msg("The left subcommand")
 
-    val addNamed =
-      add
-        .option("a").msg("Argument \"a\"").argument[Int]
-        .option("b").msg("Argument \"b\"").argument[Int]
-        .apply(_ + _)
+    val int = argument[Int].msg("Integer argument")
+    val bool = argument[Boolean].msg("Boolean argument")
+    val a = option("a")
+    val b = option("b")
+    val r = option("-r" | "--r")
 
-    val addAssigned =
-      add
-        .assignment[Int]("a=")
-        .assignment[Int]("b=")
-        .apply(_ + _)
+    val addUnnamed = (add - int - int) (_ + _)
+    val addNamed = (add - a - int - b - int) (_ + _)
+    val addAssigned = (add - assignment[Int]("a") - assignment[Int]("b")) (_ + _)
+    val addUnnamedRec = (add - r - int - int) (_ + _)
+    val shiftArgs = (shift - bool - argument[String]) ((_, _) => println("YA"))
+    val shiftOpt = (shift - r - bool) (x => println(x))
 
-    val shiftArgs =
-      shift
-        .argument[String].msg("Some string argument")
-        .argument[Int].msg("Some int argument")
-        .apply { (a, b) =>
-          a + b
-        }
+    val shiftLeft = (shift - left - bool) (x => println(x))
 
-    val shiftOpt =
-      shift
-        .option("-a" | "--a")
-        .apply(() => println("HA"))
+    val store = Store.empty +> addUnnamed +> addUnnamedRec +> addNamed +> addAssigned +> shiftArgs +> shiftOpt +> shiftLeft
 
-    val store = Store.empty +> addUnnamed +> addUnnamedRec +> addNamed +> addAssigned +> shiftArgs +> shiftOpt
-
-    //    val params1 = List("add", "2", "3")
-    //    val params2 = List("add", "a", "2", "b", "3")
-    //    val params3 = List("add", "a=2", "b=3")
-    //    val params4 = List("shift", "a", "1")
-    //    val params5 = List("shift", "-a")
-    //println(Interpreter.interpret(store).run(params4))
 
     Interpreter.
       interpretH(store).
-      run(List("add", "1", "--help")).
-      fold(_ => println(""))(println)
+      run(List("shift", "x", "--help")).
+      fold(errors => println(errors))(value => println(value))(metadata => println(metadata))
+
   }
 
+  /*
+   TODO: Problem!
+
+   Everything fails when I input something that is not a valid command, but request to see help or suggestions.
+   => That's because the partial match doesn't work properly. If at some point the partial match encounters something
+   it doesn't know, it leads to an empty Set Tree[Denot], which makes everything blow up.
+   */
 }

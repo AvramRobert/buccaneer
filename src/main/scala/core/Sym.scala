@@ -48,6 +48,7 @@ sealed trait Denot {
   }
 
   def docs: Docs
+  def msg(info: String): Denot
 
   def mapDocs(f: Docs => Docs): Denot = this match {
     case id @ Identifier(_, _, docs) => id.copy(docs = f(docs))
@@ -62,9 +63,15 @@ sealed trait Denot {
   }
 }
 
-case class Identifier(symbol: Sym, isMajor: Boolean, docs: Docs) extends Denot
-case class Typing[A](proof: Read[A], docs: Docs) extends Denot
-case class TypedIdentifier[A](symbol: Sym, proof: Read[A], docs: Docs) extends Denot
+case class Identifier(symbol: Sym, isMajor: Boolean, docs: Docs) extends Denot {
+  override def msg(info: String): Identifier = Identifier(symbol, isMajor, docs.mapMsg(_ => info))
+}
+case class Typing[A](proof: Read[A], docs: Docs) extends Denot {
+  override def msg(info: String): Typing[A] = Typing(proof, docs.mapMsg(_ => info))
+}
+case class TypedIdentifier[A](symbol: Sym, proof: Read[A], docs: Docs) extends Denot {
+  override def msg(info: String): TypedIdentifier[A] = TypedIdentifier(symbol, proof, docs.mapMsg(_ => info))
+}
 
 object Docs {
   def empty: Docs = Docs("")
