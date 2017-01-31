@@ -2,7 +2,6 @@ package core
 
 import Formatter.Formatter
 import Binary.treeSyntax
-import core.Store._
 import scalaz.syntax.traverse._
 import scala.annotation.tailrec
 import scalaz.Reader
@@ -109,33 +108,7 @@ object Man {
     else v
   }
 
-  def help[A](store: Store[MapT, A], input: List[String]): Section[String] = for {
-    matched <- section(_ => Interpreter.partialMatch(store.keySet, input).toVector)
-    zipped = matched.map(_ zips input)
-    first = zipped.map(_.takeWhile(_._2.isDefined).map(_._1))
-    rest = zipped.map(_.dropWhile(_._2.isDefined).map(_._1))
-    commandSection <- first.headOption.fold(emptySection)(command)
-    usageSection <- usage(matched)
-    optionsSection <- options(rest)
-    subcommandSection <- subcommands(rest)
-    linebreak = Formatter.empty[Char]
-  } yield makeText {
-    (text("NAME") +:
-      commandSection +:
-      linebreak +:
-      text("USAGE") +:
-      whenEmpty(usageSection)("No usage information available.")) ++
-      (linebreak +:
-        text("OPTIONS") +:
-        whenEmpty(optionsSection)("There are no options available.")) ++
-      (linebreak +:
-        text("COMMANDS") +:
-        whenEmpty(subcommandSection)("There are no commands available.") :+
-        linebreak :+
-        text("Hint: You can call `--sgst` at any point to receive a list of all possible commands that match your current input."))
-  }
-
-  def help2[A](input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = for {
+  def help[A](input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = for {
     matched <- section(_ => corresponding.toVector)
     zipped = matched.map(_ zips input)
     first = zipped.map(_.takeWhile(_._2.isDefined).map(_._1))
@@ -161,19 +134,7 @@ object Man {
         text("Hint: You can call `--sgst` at any point to receive a list of all possible commands that match your current input."))
   }
 
-  def suggest[A](store: Store[MapT, A], input: List[String]): Section[String] = section { _ =>
-    makeText {
-      Interpreter.partialMatch(store.keySet, input).
-        map { tree =>
-          text((tree zips input).string(" ") {
-            case (_, Some(v)) => v
-            case (denot, _) => denot.show
-          })
-        }
-    }
-  }
-
-  def suggest2[A](input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = section { _ =>
+  def suggest[A](input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = section { _ =>
     makeText {
       corresponding.
         map { tree =>
@@ -183,14 +144,6 @@ object Man {
           })
         }
     }
-  }
-
-  def helper[A](store: Store[MapT, A], helpConfig: HelpConfig): List[String] => String = input => {
-    help(store, input).run(helpConfig)
-  }
-
-  def suggester[A](store: Store[MapT, A], helpConfig: HelpConfig): List[String] => String = input => {
-    suggest(store, input).run(helpConfig)
   }
 }
 

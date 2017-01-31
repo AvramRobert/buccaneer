@@ -1,41 +1,45 @@
 package core
 
-import scalaz.syntax.validation._
-import scalaz.Kleisli
-import Validators._
-import core.Store.MapT
-import Store._
-import Binary.treeSyntax
-import core.Man.HelpConfig
-import core.Read._
-
+import core.Binary.treeSyntax
+import core.Man.{HelpConfig, Section}
+import core.Read.Result
+import core.Store._
 import scalaz.syntax.applicative._
+import scalaz.syntax.validation._
+import scalaz.{Failure, Kleisli}
+import core.Validators._
 
-sealed trait Interpret[+A] {
-  def fold[B]
-  (failure: List[Throwable] => B)
-  (data: A => B)
-  (metaData: String => B): B = this match {
-    case Fail(errors) => failure(errors)
-    case Data(get) => data(get)
-    case MetaData(get) => metaData(get)
+object Interpreter {
+  sealed trait Step[+A] {
+    def flatMap[B](f: A => Step[B]): Step[B] = this match {
+      case Transform(result) => (result map f).fold(
+        x => Transform(Failure(x)),
+        identity)
+      case Meta(info) => Meta(info)
+    }
+
+    def map[B](f: A => B): Step[B] = this match {
+      case Transform(result) => Transform(result map f)
+      case Meta(info) => Meta(info)
+    }
+
+    def fold[B](success: A => B)
+               (fail: List[Throwable] => B)
+               (meta: String => B): B = this match {
+      case Transform(result) => result.fold(errs => fail(errs.list), success)
+      case Meta(info) => meta(info)
+    }
   }
 
-}
+  case class Transform[A](result: Result[A]) extends Step[A]
 
-case class Fail(errors: List[Throwable]) extends Interpret[Nothing]
+  case class Meta(info: String) extends Step[Nothing]
 
-case class Data[A](get: A) extends Interpret[A]
+  type Phase[A, B] = Kleisli[Step, A, B]
+  type AST = Tree[(Denot, String)]
+  type Shape = Tree[Denot]
 
-case class MetaData(get: String) extends Interpret[Nothing]
-
-//TODO: Can't I generalise this? Or should'nt I generalise this?
-//TODO: Make everything return an `Interpret` -> I may be able to simplify this a bit that way
-object Interpreter {
-  type Step[A, B] = Kleisli[Result, A, B]
-  type IAST = Tree[(Denot, String)] // interpolated abstract syntax tree
-
-  def partialMatch(commands: Set[Tree[Denot]], input: List[String]): Set[Tree[Denot]] =
+  def partialMatch(commands: Set[Shape], input: List[String]): Set[Shape] =
     commands.filter {
       _.zipL(input).
         serialise.
@@ -46,78 +50,86 @@ object Interpreter {
         }
     }
 
-  def interpretation[A, B](f: A => Interpret[B]): Kleisli[Interpret, A, B] = Kleisli(f)
+  def phase[A, B](f: A => Step[B]): Phase[A, B] = Kleisli(f)
 
-  def step[A, B](f: A => Result[B]): Step[A, B] = Kleisli[Result, A, B](f)
+  def transform[A, B](f: A => Result[B]): Phase[A, B] = phase(f andThen Transform.apply)
 
-  def interpret[A](store: Store[Store.MapT, A]) = resolve(store.keySet) andThen runFrom(store)
+  def interpret[A](cmd: Cmd[A]) =
+    interpolate(Set(cmd.syntax)) andThen
+      pick andThen
+      transform { (ast: AST) =>
+        (ast.validate(syntax) |@| ast.validate(types)) ((_, t) => t)
+      } andThen
+      run(cmd)
 
-  //TODO: Make better
-  def interpretH[A](store: Store[Store.MapT, A], helpConfig: HelpConfig = HelpConfig(150, 5, 5)) = interpretation { (input: List[String]) =>
-    input.last match {
-      case "-help" | "--help" => partialMatch(store.keySet, input.dropRight(1)) match {
-        case set if set.isEmpty => Fail(List(new Throwable("Could not find any command matching that input")))
-        case set => MetaData(Man.help2(input.dropRight(1), set).run(helpConfig))
-      }
-      case "-sgst" | "--sgst" =>
-        partialMatch(store.keySet, input.dropRight(1)) match {
-          case set if set.isEmpty => Fail(List(new Throwable("Could not find any command matching that input")))
-          case set => MetaData(Man.suggest2(input.dropRight(1), set).run(helpConfig))
-        }
-      case _ =>
-        interpret(store).
-          run(input).
-          fold(errors => Fail(errors.list), x => Data(x))
-    }
-  }
+  def interpret[A](store: Store[MapT, A]) = resolve(store.keySet) andThen runFrom(store)
 
-  def interpret[A](command: Cmd[A]): Step[List[String], A] = step { input =>
-    for {
-      tree <- (command.syntax zipL input).successNel
-      _ <- tree.validate(syntax)
-      _ <- tree.validate(types)
-      output <- run(command, tree)
-    } yield output
-  }
+  def interpretH[A](store: Store[MapT, A], helpConfig: HelpConfig = HelpConfig(150, 5, 5)) =
+    meta(store, helpConfig) andThen resolve(store.keySet) andThen runFrom(store)
 
-  def resolve(keySet: Set[Tree[Denot]]) =
-    fit(keySet) andThen
+  def resolve(all: Set[Shape]) =
+    interpolate(all) andThen
+      filter(_.rootOf {
+        case (Identifier(Label(value), _, _), input) => input == value
+        case _ => false
+      }) andThen
       validate(syntax) andThen
       validate(types) andThen
-      select
+      pick
 
-  def fit(commands: Set[Tree[Denot]]) = step { (input: List[String]) =>
-    commands.filter {
-      case tree@Identifier(Label(value), _, _) -< (_, _) => (value == input.head) && tree.depth == input.size
+
+  def meta[A](store: Store[MapT, A], helpConfig: HelpConfig) = phase { (input: List[String]) =>
+    def show(f: (List[String], Set[Shape]) => Section[String]): Step[Nothing] = {
+      lazy val command = input.dropRight(1)
+      partialMatch(store.keySet, command) match {
+        case set if set.isEmpty => Transform(new Throwable("Unknown command").failureNel)
+        case set => Meta(f(command, set).run(helpConfig))
+      }
     }
-      .map(_ zipL input)
-      .toList
-      .successNel
+
+    input.last match {
+      case "-help" | "--help" => show(Man.help)
+      case "-sgst" | "--sgst" => show(Man.suggest)
+      case _ => Transform(input.successNel)
+    }
   }
 
-  def validate(f: ((Denot, String)) => Result[(Denot, String)]) = step { (is: List[IAST]) =>
-    val point = List.empty[IAST].successNel[Throwable]
-    is.map(_ validate f)
+  def interpolate(commands: Set[Shape]) = transform { (input: List[String]) =>
+    commands.
+      filter(_.depth == input.size).
+      map(_ zipL input).
+      toList.
+      successNel
+  }
+
+  def filter(f: AST => Boolean) = transform { (commands: List[AST]) =>
+    commands.filter(f).successNel
+  }
+
+  def validate(f: ((Denot, String)) => Result[(Denot, String)]) = transform { (commands: List[AST]) =>
+    val point = List.empty[AST].successNel[Throwable]
+    commands.map(_ validate f)
       .filter(_.isSuccess)
       .foldRight(point)((a, b) => (a |@| b) (_ :: _))
   }
 
-  def select = step { (rem: List[IAST]) =>
-    rem match {
+  def pick = transform { (commands: List[AST]) =>
+    commands match {
       case h :: Nil => h.successNel
-      case Nil => new Throwable("Could not find any command matching that input").failureNel
-      case _ => new Throwable("Ambiguous input. Too many commands match the input").failureNel
+      case Nil => new Throwable("No command found matching input").failureNel
+      case _ => new Throwable(s"Ambiguous input. ${commands.size} match given input").failureNel
     }
   }
 
-  def runFrom[A](m: Store[MapT, A]) = step { (syntax: IAST) =>
-    val key = syntax map (_._1)
-    val fail = new Throwable("Unknown command").failureNel[A]
-    m.get(key).fold(fail)(run(_, syntax))
+  def runFrom[A](store: Store[MapT, A]) = phase { (command: AST) =>
+    val key = command map (_._1)
+    val fail = Transform(new Throwable("Unknown command").failureNel[A])
+
+    store.get(key).fold[Step[A]](fail)(cmd => run(cmd).run(command))
   }
 
-  def run[A](cmd: Cmd[A], syntax: IAST): Result[A] = {
-    val args = syntax.filterL(_._1.isTyped).map(_._2)
+  def run[A](cmd: Cmd[A]): Phase[AST, A] = transform { (ast: AST) =>
+    val args = ast.filterL(_._1.isTyped).map(_._2)
     cmd.run(args)
   }
 }
@@ -139,4 +151,3 @@ object Validators {
     case _ => assoc.successNel
   }
 }
-

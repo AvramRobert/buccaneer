@@ -14,5 +14,8 @@ I may perhaps not really need `Tree`. Everything implemented so far is actually 
 
 
 =====================
-It might be quite a good idea to let people configure their own MAN pages. Structure for help and such.
-And more specifically, perhaps the commands that bring up help and suggestions.
+Future features:
+
+1. User-defined type-conditions // should be easy
+2. User-defined meta-parametrisations // should be somewhat easy
+3. Indexing errors by their positions while validating // should also be somewhat easy

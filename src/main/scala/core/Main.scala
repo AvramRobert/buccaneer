@@ -29,19 +29,14 @@ object Main {
 
     val store = Store.empty +> addUnnamed +> addUnnamedRec +> addNamed +> addAssigned +> shiftArgs +> shiftOpt +> shiftLeft
 
-
     Interpreter.
-      interpretH(store).
-      run(List("shift", "x", "--help")).
-      fold(errors => println(errors))(value => println(value))(metadata => println(metadata))
+      interpret(addNamed).
+      run(List("add", "a", "1", "b", "1")).
+      fold(println)(_ foreach println)(println)
 
+//    Interpreter2.
+//      interpretH(store).
+//      run(List("add", "a", "2", "--help")).
+//      fold(println)(_ foreach println)(println)
   }
-
-  /*
-   TODO: Problem!
-
-   Everything fails when I input something that is not a valid command, but request to see help or suggestions.
-   => That's because the partial match doesn't work properly. If at some point the partial match encounters something
-   it doesn't know, it leads to an empty Set Tree[Denot], which makes everything blow up.
-   */
 }

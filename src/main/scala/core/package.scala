@@ -1,5 +1,7 @@
-import scalaz.{Applicative, Traverse}
-import core.Lexical
+import core.Interpreter.Step
+import core.Read.Result
+
+import scalaz.{Applicative, Apply, Bind, Traverse}
 
 package object core {
 
@@ -9,6 +11,12 @@ package object core {
         ap.apply2(gvb, f(a))(_ :+ _)
       }
     }
+  }
+
+  implicit lazy val bindStep = new Bind[Step] {
+    override def bind[A, B](fa: Step[A])(f: (A) => Step[B]) = fa flatMap f
+
+    override def map[A, B](fa: Step[A])(f: (A) => B) = fa map f
   }
 
   implicit lazy val lexicalChar: Lexical[Char] = new Lexical[Char] {
@@ -21,4 +29,10 @@ package object core {
     override def eq(a1: Char, a2: Char) = a1 == a2
   }
 
+
+  implicit lazy val applyResult: Apply[Result] = new Apply[Result] {
+    override def ap[A, B](fa: => Result[A])(f: => Result[(A) => B]) = fa ap f
+
+    override def map[A, B](fa: Result[A])(f: (A) => B) = fa map f
+  }
 }

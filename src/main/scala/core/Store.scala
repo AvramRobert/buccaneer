@@ -3,8 +3,8 @@ package core
 import scala.annotation.implicitNotFound
 
 @implicitNotFound(
-  "Command widens the type to Any, as the preceding types of ${A} and current returned type are not equal. \n" +
-    "To avoid this, please use `+>`, instead of `+` from the beginning.")
+  "Command needs to widen the type to Any, as the preceding types of ${A} and current returned type are not equal. \n" +
+    "To do this, please use `+>`, instead of `+`.")
 private[core]
 sealed trait AddW[M[_], A] {
   def add[B](m: M[A])(itm: Cmd[B]): M[A]
