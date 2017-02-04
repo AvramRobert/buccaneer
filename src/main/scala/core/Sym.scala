@@ -2,10 +2,6 @@ package core
 
 import scala.annotation.tailrec
 
-object Sym {
-  def apply(s: String): Sym = Label(s.trim)
-}
-
 sealed trait Sym {
 
   def isSymbol(s: String): Boolean = find(_ == s).fold(false)(_ => true)

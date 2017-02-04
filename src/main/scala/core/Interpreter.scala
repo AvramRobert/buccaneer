@@ -1,7 +1,6 @@
 package core
 
-import core.Tree.treeSyntax
-import core.Man.{HelpConfig, Section}
+import core.Man.Section
 import core.Read.Result
 import core.Store._
 
@@ -42,8 +41,8 @@ object Interpreter {
 
   def partialMatch(commands: Set[Shape], input: List[String]): Set[Shape] =
     commands.filter {
-      _.zipL(input).
-        serialise.
+      _.zipWithList(input).
+        toVector.
         forall {
           case (Identifier(sym, _, _), value) => sym.isSymbol(value)
           case (TypedIdentifier(sym, _, _), value) => sym.find(a => value startsWith a).fold(false)(_ => true)
@@ -70,7 +69,7 @@ object Interpreter {
 
   def resolve(all: Set[Shape]) =
     interpolate(all) andThen
-      filter(_.rootOf {
+      filter(_.rootOf[(Denot, String)] {
         case (Identifier(Label(value), _, _), input) => input == value
         case _ => false
       }) andThen
@@ -98,7 +97,7 @@ object Interpreter {
   def interpolate(commands: Set[Shape]) = transform { (input: List[String]) =>
     commands.
       filter(_.depth == input.size).
-      map(_ zipL input).
+      map(_ zipWithList input).
       toList.
       successNel
   }
@@ -130,7 +129,7 @@ object Interpreter {
   }
 
   def run[A](cmd: Cmd[A]): Phase[AST, A] = transform { (ast: AST) =>
-    val args = ast.filterL(_._1.isTyped).map(_._2)
+    val args = ast.filter(_._1.isTyped).map(_._2)
     cmd.run(args)
   }
 }

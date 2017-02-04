@@ -1,14 +1,17 @@
 package core
 
 import Formatter.Formatter
-import Tree.treeSyntax
 import scalaz.syntax.traverse._
 import scala.annotation.tailrec
 import scalaz.Reader
 
+trait ManOps {
+  def helpConfig(textWidth: Int, indentation: Int, columnSpacing: Int): HelpConfig = HelpConfig(textWidth, indentation, columnSpacing)
+}
+
+case class HelpConfig(textWidth: Int, indentation: Int, columnSpacing: Int)
 
 object Man {
-  case class HelpConfig(textWidth: Int, indentation: Int, columnSpacing: Int)
 
   type Section[A] = Reader[HelpConfig, A]
 
@@ -45,7 +48,7 @@ object Man {
 
   def command(tree: Tree[Denot]): Section[Formatter[Char]] = tree.
     takeWhile(_.isMajorIdentifier).
-    serialise match {
+    toVector match {
     case name if name.isEmpty => emptySection
     case name => Reader { help =>
       text(name.

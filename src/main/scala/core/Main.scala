@@ -1,15 +1,11 @@
 package core
 
-import Implicits._
-import Store._
+import core.Implicits._
+import core.DSL._
+import core.Store._
 
 object Main {
   def main(args: Array[String]) = {
-    val commandDSL = new CommandOps {}
-
-    import commandDSL._
-
-
     val add = command("add").msg("The add command")
     val shift = command("shift").msg("The shift command")
     val left = command("left").msg("The left subcommand")
@@ -36,9 +32,9 @@ object Main {
       run(List("add", "a", "1", "b", "1")).
       fold(println)(_ foreach println)(println)
 
-//    Interpreter2.
+//    Interpreter.
 //      interpretH(store).
-//      run(List("add", "a", "2", "--help")).
+//      run(List("add", "a", "2", "--sgst")).
 //      fold(println)(_ foreach println)(println)
   }
 }

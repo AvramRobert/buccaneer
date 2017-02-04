@@ -1,14 +1,13 @@
 package core
 
 import core.Denot.{id, typedId, typing}
-import Tree.treeSyntax
 import core.Read.Result
 import scalaz.syntax.validation._
 import scalaz.{Apply, IndexedState, State}
 import CmdBld._
 
 trait CommandOps {
-  implicit def dsl(identifier: Identifier): Cmd0 = new Cmd0(Tree.lift(identifier))
+  implicit def dsl(identifier: Identifier): Cmd0 = new Cmd0(Tree(identifier))
 
   def proof[A](implicit read: Read[A]): Read[A] = read
   def command(label: Sym): Identifier = id(label, isMajor = true)
@@ -49,9 +48,9 @@ sealed trait CmdBld[+A] {
       currentType = types.headOption getOrElse ""
     } yield proof(currentType)
 
-  protected def makeId[C[_] <: CmdBld[_], B](identifier: Identifier)(f: Tree[Denot] => C[B]): C[B] = (f compose Tree.lift[Denot]) (identifier)
+  protected def makeId[C[_] <: CmdBld[_], B](identifier: Identifier)(f: Tree[Denot] => C[B]): C[B] = (f compose Tree.apply[Denot]) (identifier)
 
-  protected def makeTyp[C[_] <: CmdBld[_], B](typing: Typing[B])(f: (Tree[Denot], Typer[B]) => C[B]): C[B] = f(Tree.lift(typing), coerce(typing.proof))
+  protected def makeTyp[C[_] <: CmdBld[_], B](typing: Typing[B])(f: (Tree[Denot], Typer[B]) => C[B]): C[B] = f(Tree.apply(typing), coerce(typing.proof))
 
   protected def makeTId[C[_] <: CmdBld[_], B](tid: TypedIdentifier[B])(f: (Tree[Denot], Typer[B]) => C[B]): C[B] = {
     val newProof = Read { s =>
@@ -61,7 +60,7 @@ sealed trait CmdBld[+A] {
         .map(tid.proof.apply)
         .getOrElse(new Throwable(s"Could not prove that the value of ${tid.symbol.show} is of the desired type").failureNel)
     }
-    f(Tree.lift(typedId(tid.symbol, newProof)), coerce(newProof))
+    f(Tree(typedId(tid.symbol, newProof)), coerce(newProof))
   }
 }
 

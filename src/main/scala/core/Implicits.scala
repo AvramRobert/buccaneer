@@ -9,7 +9,7 @@ object Implicits {
   def unsafeCoerce[A](s: String)(f: String => A): Result[A] =
     try { f(s).successNel } catch { case e: Exception => e.failureNel }
 
-  implicit def stringToSym(s: String): Sym = Sym(s)
+  implicit def stringToSym(s: String): Sym = Label(s)
   implicit val intsReified: Read[Int] = Read[Int](unsafeCoerce(_)(_.toInt))
   implicit val booleansReified: Read[Boolean] = Read[Boolean](unsafeCoerce(_)(_.toBoolean))
   implicit val stringsReified: Read[String] = Read[String](_.successNel)
