@@ -5,7 +5,9 @@ import Store._
 
 object Main {
   def main(args: Array[String]) = {
-    import Command._
+    val commandDSL = new CommandOps {}
+
+    import commandDSL._
 
 
     val add = command("add").msg("The add command")

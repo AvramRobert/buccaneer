@@ -1,6 +1,4 @@
-import core.Interpreter.Step
 import core.Read.Result
-
 import scalaz.{Applicative, Apply, Bind, Traverse}
 
 package object core {

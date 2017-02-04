@@ -1,14 +1,13 @@
 package core
 
 import Formatter.Formatter
-import Binary.treeSyntax
+import Tree.treeSyntax
 import scalaz.syntax.traverse._
 import scala.annotation.tailrec
 import scalaz.Reader
 
 
 object Man {
-
   case class HelpConfig(textWidth: Int, indentation: Int, columnSpacing: Int)
 
   type Section[A] = Reader[HelpConfig, A]
@@ -62,8 +61,7 @@ object Man {
     map {
       case a -< (l, _) => l.foldLeft(a.show.length)((x, y) => x + y.show.length) + 1
       case Leaf => 0
-    }.
-    max
+    }.max
 
   def usage(all: Vector[Tree[Denot]]): Section[Vector[Formatter[Char]]] = section { config =>
     val com = all.headOption.fold("")(_.takeWhile(_.isMajorIdentifier).string(" ")(_.show))
@@ -147,6 +145,7 @@ object Man {
   }
 }
 
+private[core]
 trait Lexical[A] {
   def blank: A
 
@@ -161,39 +160,43 @@ trait Lexical[A] {
   def isCont(a: A): Boolean = eq(a, continuation)
 }
 
+
+/*
+  Notes for improvements:
+    Idea: Define a formatter in terms of what can be done at each line.
+     One such formatter would have three specific cases, that would need handling:
+       1. Apply some formatting at every line of the input.
+       2. Apply some formatting at some subset of lines of the input.
+       3. Apply some formatting at one specific line of the input.
+     Additionally, there could also exist some transitive relation between formats. For example one line might be formatted in
+     relation to the previous one. (this is for example the case in hyphenation)
+     This would therefore imply some context dependency and might lead to the formation of a Monad.
+
+     Possible monad definitions:
+     a) A Monad may be formed by relating one homologous formatting to another. `bind` might describe taking the line, formatting it and
+     then using the formatted line to create another formatter that formats it some other way.
+     b) A Monad may be formed by relating lines together. For example, given some sub-sequence `F[A]` representing
+     a previous line, i can `flatMap` it to create another formatter that formats the `NEXT` line in relation
+     to that one.
+   */
+private[core]
 object Formatter {
 
-  type Format[A] = Vector[A] => Vector[A]
+  sealed trait Cardinality
 
-  /*
-  Notes for improvements:
-    Idea: Define a formatter in terms what can be done at each line.
-     One formatter might apply some formatting to each line, to some subset of lines or to a specific line.
-     There are, however, some additional things it might do.
-     It might adjust input in order to format something relative to something else. (i.e. filling with blanks, or hyphenating)
-     This means that the formatting of some line might be adding additional lines to it.
-     Hyphenation in particular is a special case of formatting that is applied at every line in relation to the previous one.
-     This is where context comes into play and a monad might emerge.
-     A monad can be defined by relating one homologous formatting to another. The homology in this scenario is defined
-     in terms of the line at which the formatting occurs. `bind` might describe taking the line, formatting it and
-     then using the formatted line to create another formatter that formats it some other way.
-     OR: it can be used to relate lines together. For example, given some sub-sequence `F[A]` representing
-     a previous line, i can `flatMap` it to create another formatter that formats the `NEXT` line in relation
-     that one.
-   */
+  case object All extends Cardinality
+
+  case class Few(n: Int) extends Cardinality
+
+  type Format[A] = Vector[A] => Vector[A]
 
   def apply[A: Lexical](data: Vector[A]): Formatter[A] = More(data, identity, data.size, 0, Few(1))
 
   def empty[A](implicit lexical: Lexical[A]): Formatter[A] = Formatter(Vector(lexical.blank))
 
-  sealed trait Card
-
-  case object All extends Card
-
-  case class Few(n: Int) extends Card
-
   //case class Exact(lines: List[Int]) extends Card
 
+  private[core]
   sealed trait Formatter[A] {
     protected def data: Vector[A]
 
@@ -374,8 +377,10 @@ object Formatter {
     }
   }
 
+  private[core]
   case class Every[A](data: Vector[A], f: Format[A], width: Int) extends Formatter[A]
 
-  case class More[A](data: Vector[A], f: Format[A], width: Int, at: Int, n: Card) extends Formatter[A]
+  private[core]
+  case class More[A](data: Vector[A], f: Format[A], width: Int, at: Int, n: Cardinality) extends Formatter[A]
 
 }

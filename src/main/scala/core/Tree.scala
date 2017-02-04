@@ -7,7 +7,7 @@ import scalaz.Applicative
 import scalaz.syntax.applicative._
 
 // TODO: Test
-object Binary {
+object Tree {
 
   def lift[A](a: A): Tree[A] = Node(a)
 
@@ -79,13 +79,6 @@ object Binary {
 
   def foreach[A](t: Tree[A])(f: A => Unit): Unit = foldl(t, ()) { (_, x) => f(x) }
 
-  def mapLast[A, B](t: Tree[A])(f: A => A): Tree[A] = t match {
-    case Node(v, Leaf, Leaf) => Node(f(v), Leaf, Leaf)
-    case Node(v, left, Leaf) => Node(v, mapLast(left)(f), Leaf)
-    case Node(v, left, right) => Node(v, left, mapLast(right)(f))
-    case Leaf => Leaf
-  }
-
   def serialise[A](t: Tree[A]): Vector[A] = foldl(t, Vector[A]())(_ :+ _)
 
   def zips[A, B](tree: Tree[A], list: List[B]): Tree[(A, Option[B])] = tree match {
@@ -119,47 +112,45 @@ case class Node[A](value: A, left: Tree[A] = Leaf, right: Tree[A] = Leaf) extend
 case object Leaf extends Tree[Nothing]
 
 case class TreeSyntax[A](t: Tree[A]) {
-  def affix(nb: Tree[A]): Tree[A] = Binary.affix(t, nb)
+  def affix(nb: Tree[A]): Tree[A] = Tree.affix(t, nb)
 
-  def infix(nb: Tree[A]): Tree[A] = Binary.infix(t, nb)
+  def infix(nb: Tree[A]): Tree[A] = Tree.infix(t, nb)
 
-  def affix(v: A): Tree[A] = affix(Binary.lift(v))
+  def affix(v: A): Tree[A] = affix(Tree.lift(v))
 
-  def infix(v: A): Tree[A] = infix(Binary.lift(v))
+  def infix(v: A): Tree[A] = infix(Tree.lift(v))
 
-  def map[B](f: A => B): Tree[B] = Binary.map(t)(f)
+  def map[B](f: A => B): Tree[B] = Tree.map(t)(f)
 
-  def foreach(f: A => Unit): Unit = Binary.foreach(t)(f)
+  def foreach(f: A => Unit): Unit = Tree.foreach(t)(f)
 
-  def rootOf(p: A => Boolean): Boolean = Binary.rootOf(t)(p)
+  def rootOf(p: A => Boolean): Boolean = Tree.rootOf(t)(p)
 
-  def depth: Int = Binary.depth(t)
+  def depth: Int = Tree.depth(t)
 
-  def zipL[B](list: List[B]): Tree[(A, B)] = Binary.zipL(t, list)
+  def zipL[B](list: List[B]): Tree[(A, B)] = Tree.zipL(t, list)
 
-  def validate(f: A => Result[A]): Result[Tree[A]] = Binary.validate(t)(f)
+  def validate(f: A => Result[A]): Result[Tree[A]] = Tree.validate(t)(f)
 
   def rootOption: Option[A] = t match {
     case root -< (_, _) => Some(root)
     case _ => None
   }
 
-  def filterL(f: A => Boolean): List[A] = Binary.foldr(t, List.empty[A]) {
+  def filterL(f: A => Boolean): List[A] = Tree.foldr(t, List.empty[A]) {
     case (a, b) if f(a) => a :: b
     case (_, b) => b
   }.reverse
 
-  def foldLeft[B](b: B)(f: (B, A) => B): B = Binary.foldl(t, b)(f)
+  def foldLeft[B](b: B)(f: (B, A) => B): B = Tree.foldl(t, b)(f)
 
-  def dropWhile(p: A => Boolean): Tree[A] = Binary.dropWhile(t)(p)
+  def dropWhile(p: A => Boolean): Tree[A] = Tree.dropWhile(t)(p)
 
-  def takeWhile(p: A => Boolean): Tree[A] = Binary.takeWhile(t)(p)
+  def takeWhile(p: A => Boolean): Tree[A] = Tree.takeWhile(t)(p)
 
-  def serialise: Vector[A] = Binary.serialise(t)
+  def serialise: Vector[A] = Tree.serialise(t)
 
-  def string(sep: String)(f: A => String): String = Binary.string(t, sep)(f)
+  def string(sep: String)(f: A => String): String = Tree.string(t, sep)(f)
 
-  def mapLast(f: A => A): Tree[A] = Binary.mapLast(t)(f)
-
-  def zips[B](list: List[B]): Tree[(A, Option[B])] = Binary.zips(t, list)
+  def zips[B](list: List[B]): Tree[(A, Option[B])] = Tree.zips(t, list)
 }

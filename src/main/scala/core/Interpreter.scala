@@ -1,40 +1,41 @@
 package core
 
-import core.Binary.treeSyntax
+import core.Tree.treeSyntax
 import core.Man.{HelpConfig, Section}
 import core.Read.Result
 import core.Store._
+
 import scalaz.syntax.applicative._
 import scalaz.syntax.validation._
 import scalaz.{Failure, Kleisli}
 import core.Validators._
 
-object Interpreter {
-  sealed trait Step[+A] {
-    def flatMap[B](f: A => Step[B]): Step[B] = this match {
-      case Transform(result) => (result map f).fold(
-        x => Transform(Failure(x)),
-        identity)
-      case Meta(info) => Meta(info)
-    }
-
-    def map[B](f: A => B): Step[B] = this match {
-      case Transform(result) => Transform(result map f)
-      case Meta(info) => Meta(info)
-    }
-
-    def fold[B](success: A => B)
-               (fail: List[Throwable] => B)
-               (meta: String => B): B = this match {
-      case Transform(result) => result.fold(errs => fail(errs.list), success)
-      case Meta(info) => meta(info)
-    }
+sealed trait Step[+A] {
+  def flatMap[B](f: A => Step[B]): Step[B] = this match {
+    case Transform(result) => (result map f).fold(
+      x => Transform(Failure(x)),
+      identity)
+    case Meta(info) => Meta(info)
   }
 
-  case class Transform[A](result: Result[A]) extends Step[A]
+  def map[B](f: A => B): Step[B] = this match {
+    case Transform(result) => Transform(result map f)
+    case Meta(info) => Meta(info)
+  }
 
-  case class Meta(info: String) extends Step[Nothing]
+  def fold[B](success: A => B)
+             (fail: List[Throwable] => B)
+             (meta: String => B): B = this match {
+    case Transform(result) => result.fold(errs => fail(errs.list), success)
+    case Meta(info) => meta(info)
+  }
+}
 
+case class Transform[A](result: Result[A]) extends Step[A]
+
+case class Meta(info: String) extends Step[Nothing]
+
+object Interpreter {
   type Phase[A, B] = Kleisli[Step, A, B]
   type AST = Tree[(Denot, String)]
   type Shape = Tree[Denot]
@@ -62,9 +63,9 @@ object Interpreter {
       } andThen
       run(cmd)
 
-  def interpret[A](store: Store[MapT, A]) = resolve(store.keySet) andThen runFrom(store)
+  def interpret[A](store: Store[SMap, A]) = resolve(store.keySet) andThen runFrom(store)
 
-  def interpretH[A](store: Store[MapT, A], helpConfig: HelpConfig = HelpConfig(150, 5, 5)) =
+  def interpretH[A](store: Store[SMap, A], helpConfig: HelpConfig = HelpConfig(150, 5, 5)) =
     meta(store, helpConfig) andThen resolve(store.keySet) andThen runFrom(store)
 
   def resolve(all: Set[Shape]) =
@@ -78,7 +79,7 @@ object Interpreter {
       pick
 
 
-  def meta[A](store: Store[MapT, A], helpConfig: HelpConfig) = phase { (input: List[String]) =>
+  def meta[A](store: Store[SMap, A], helpConfig: HelpConfig) = phase { (input: List[String]) =>
     def show(f: (List[String], Set[Shape]) => Section[String]): Step[Nothing] = {
       lazy val command = input.dropRight(1)
       partialMatch(store.keySet, command) match {
@@ -121,7 +122,7 @@ object Interpreter {
     }
   }
 
-  def runFrom[A](store: Store[MapT, A]) = phase { (command: AST) =>
+  def runFrom[A](store: Store[SMap, A]) = phase { (command: AST) =>
     val key = command map (_._1)
     val fail = Transform(new Throwable("Unknown command").failureNel[A])
 

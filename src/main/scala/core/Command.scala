@@ -1,17 +1,14 @@
 package core
 
 import core.Denot.{id, typedId, typing}
-import Binary.treeSyntax
+import Tree.treeSyntax
 import core.Read.Result
-import Command.Typer
 import scalaz.syntax.validation._
 import scalaz.{Apply, IndexedState, State}
+import CmdBld._
 
-
-object Command {
-  type Typer[A] = IndexedState[List[String], List[String], Result[A]]
-
-  implicit def dsl(identifier: Identifier): Cmd0 = new Cmd0(Binary.lift(identifier))
+trait CommandOps {
+  implicit def dsl(identifier: Identifier): Cmd0 = new Cmd0(Tree.lift(identifier))
 
   def proof[A](implicit read: Read[A]): Read[A] = read
   def command(label: Sym): Identifier = id(label, isMajor = true)
@@ -20,6 +17,25 @@ object Command {
   def assignment[A: Read](label: Sym): TypedIdentifier[A] = typedId(label, proof)
 }
 
+private[core]
+object CmdBld {
+  type Typer[A] = IndexedState[List[String], List[String], Result[A]]
+
+  // Caution: Doing the computation within `fa` reverses the order of parameter application when running the Monad
+  // I.e given a command.param[Int].param[String] <- List("1", "a"), it will feed `1` and `a` in reverse => first "a" then "1"
+  // If the computation happens within `f`, then the order is correct.
+  lazy val applier: Apply[Typer] = new Apply[Typer] {
+    override def ap[B, C](fa: => Typer[B])(f: => Typer[B => C]): Typer[C] =
+      for {
+        vf <- f
+        va <- fa
+      } yield va ap vf
+
+    override def map[B, C](fa: Typer[B])(f: B => C): Typer[C] = fa map (_ map f)
+  }
+}
+
+private[core]
 sealed trait CmdBld[+A] {
   protected def coerce[B](f: String => Result[B]): Typer[B] = coerce(Read(f))
 
@@ -33,22 +49,9 @@ sealed trait CmdBld[+A] {
       currentType = types.headOption getOrElse ""
     } yield proof(currentType)
 
-  // Caution: Doing the computation within `fa` reverses the order of parameter application when running the Monad
-  // I.e given a command.param[Int].param[String] <- List("1", "a"), it will feed `1` and `a` in reverse => first "a" then "1"
-  // If the computation happens within `f`, then the order is correct.
-  protected lazy val applier: Apply[Typer] = new Apply[Typer] {
-    override def ap[B, C](fa: => Typer[B])(f: => Typer[B => C]): Typer[C] =
-      for {
-        vf <- f
-        va <- fa
-      } yield va ap vf
+  protected def makeId[C[_] <: CmdBld[_], B](identifier: Identifier)(f: Tree[Denot] => C[B]): C[B] = (f compose Tree.lift[Denot]) (identifier)
 
-    override def map[B, C](fa: Typer[B])(f: B => C): Typer[C] = fa map (_ map f)
-  }
-
-  protected def makeId[C[_] <: CmdBld[_], B](identifier: Identifier)(f: Tree[Denot] => C[B]): C[B] = (f compose Binary.lift[Denot]) (identifier)
-
-  protected def makeTyp[C[_] <: CmdBld[_], B](typing: Typing[B])(f: (Tree[Denot], Typer[B]) => C[B]): C[B] = f(Binary.lift(typing), coerce(typing.proof))
+  protected def makeTyp[C[_] <: CmdBld[_], B](typing: Typing[B])(f: (Tree[Denot], Typer[B]) => C[B]): C[B] = f(Tree.lift(typing), coerce(typing.proof))
 
   protected def makeTId[C[_] <: CmdBld[_], B](tid: TypedIdentifier[B])(f: (Tree[Denot], Typer[B]) => C[B]): C[B] = {
     val newProof = Read { s =>
@@ -58,7 +61,7 @@ sealed trait CmdBld[+A] {
         .map(tid.proof.apply)
         .getOrElse(new Throwable(s"Could not prove that the value of ${tid.symbol.show} is of the desired type").failureNel)
     }
-    f(Binary.lift(typedId(tid.symbol, newProof)), coerce(newProof))
+    f(Tree.lift(typedId(tid.symbol, newProof)), coerce(newProof))
   }
 }
 
