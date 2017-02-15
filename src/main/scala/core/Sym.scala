@@ -1,34 +1,37 @@
 package core
 
-import scala.annotation.tailrec
-
 sealed trait Sym {
 
   def isSymbol(s: String): Boolean = find(_ == s).fold(false)(_ => true)
 
-  def | (that: String): Alternative = this match {
-    case Label(v) => Alternative(v, Label(that))
-    case Alternative(v, alt) => Alternative(v, alt | that)
+  def | (that: String): Alternative = this | Label(that)
+
+  def | (label: Label): Alternative = this match {
+    case x @ Label(_) => Alternative(Vector(x, label))
+    case Alternative(alt) => Alternative(alt :+ label)
   }
 
-  @tailrec final def find(p: String => Boolean): Option[Label] = this match {
+  final def find(p: String => Boolean): Option[Label] = this match {
     case x@Label(value) if p(value) => Some(x)
-    case Alternative(value, _) if p(value) => Some(Label(value))
-    case Alternative(_, symbol) => symbol find p
+    case Alternative(alts) => alts.find(x => p(x.value))
     case _ => None
   }
 
   def show: String = this match {
-    case Label(value) => value
-    case Alternative(value, symbol) => s"$value | ${symbol.show} "
+    case Label(v) => v
+    case Alternative(alts) => alts.map(_.value).mkString(" | ")
   }
 }
+
 case class Label(value: String) extends Sym
-case class Alternative(value: String, alt: Sym) extends Sym
+
+case class Alternative(alts: Vector[Label]) extends Sym
 
 object Denot {
   def id(symbol: Sym, isMajor: Boolean = false, docs: Docs = Docs.empty): Identifier = Identifier(symbol, isMajor, docs)
+
   def typing[A](proof: Read[A], docs: Docs = Docs.empty): Typing[A] = Typing(proof, docs)
+
   def typedId[A](symbol: Sym, proof: Read[A], docs: Docs = Docs.empty): TypedIdentifier[A] = TypedIdentifier(symbol, proof, docs)
 }
 
@@ -44,12 +47,13 @@ sealed trait Denot {
   }
 
   def docs: Docs
+
   def msg(info: String): Denot
 
   def mapDocs(f: Docs => Docs): Denot = this match {
-    case id @ Identifier(_, _, docs) => id.copy(docs = f(docs))
-    case typing @ Typing(_, docs) => typing.copy(docs = f(docs))
-    case typedId @ TypedIdentifier(_, _, docs) => typedId.copy(docs = f(docs))
+    case id@Identifier(_, _, docs) => id.copy(docs = f(docs))
+    case typing@Typing(_, docs) => typing.copy(docs = f(docs))
+    case typedId@TypedIdentifier(_, _, docs) => typedId.copy(docs = f(docs))
   }
 
   def show: String = this match {
@@ -62,9 +66,11 @@ sealed trait Denot {
 case class Identifier(symbol: Sym, isMajor: Boolean, docs: Docs) extends Denot {
   override def msg(info: String): Identifier = Identifier(symbol, isMajor, docs.mapMsg(_ => info))
 }
+
 case class Typing[A](proof: Read[A], docs: Docs) extends Denot {
   override def msg(info: String): Typing[A] = Typing(proof, docs.mapMsg(_ => info))
 }
+
 case class TypedIdentifier[A](symbol: Sym, proof: Read[A], docs: Docs) extends Denot {
   override def msg(info: String): TypedIdentifier[A] = TypedIdentifier(symbol, proof, docs.mapMsg(_ => info))
 }

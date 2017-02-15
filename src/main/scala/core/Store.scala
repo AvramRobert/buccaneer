@@ -29,7 +29,6 @@ object Store {
   type SMap[A] = Map[Tree[Denot], Cmd[A]]
 
   def empty[A] = Store[SMap, A](Map.empty[Tree[Denot], Cmd[A]])
-  def widen[A](store: Store[SMap, A]): Store[SMap, Any] = store.underlying.foldLeft(empty[Any])((a, b) => a +> b._2)
 
   implicit def addTC[A]: Add[SMap, A] = new Add[SMap, A] {
     override def add(m: SMap[A])(itm: Cmd[A]): SMap[A] = m + (itm.syntax -> itm)

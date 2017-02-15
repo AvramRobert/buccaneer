@@ -1,7 +1,7 @@
 /**
   * Created by robert on 05/02/17.
   */
-class ManSpec {
+class ManSpec extends DefaultTestSuite {
 
 }
 

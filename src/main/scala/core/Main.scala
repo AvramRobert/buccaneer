@@ -39,7 +39,7 @@ object Main {
 
     Interpreter.
       interpretH(store).
-      run(List("shift", "left", "-r", "a")).
+      run(List("shift", "--help")).
       fold(println)(_ foreach println)(println)
 
   }

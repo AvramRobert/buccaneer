@@ -1,12 +1,9 @@
-import core.Tree
+import core.{Leaf, Node, Tree}
 import org.scalacheck.Gen
-import org.scalatest.{Matchers, WordSpec}
-import org.scalatest.prop.PropertyChecks
 import scala.util.Random
 import scalaz.std.option._
-import core.{Leaf, Node}
 
-class TreeSpec extends WordSpec with PropertyChecks with Matchers {
+class TreeSpec extends DefaultTestSuite {
 
   "A binary tree" should {
 
