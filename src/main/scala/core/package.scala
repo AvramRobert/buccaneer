@@ -27,7 +27,6 @@ package object core {
     override def eq(a1: Char, a2: Char) = a1 == a2
   }
 
-
   implicit lazy val applyResult: Apply[Result] = new Apply[Result] {
     override def ap[A, B](fa: => Result[A])(f: => Result[(A) => B]) = fa ap f
 

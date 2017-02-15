@@ -69,7 +69,7 @@ object Man {
   def usage(all: Vector[Tree[Denot]]): Section[Vector[Formatter[Char]]] = section { config =>
     val com = all.headOption.fold("")(_.takeWhile(_.isMajorIdentifier).string(" ")(_.show))
 
-    Stream.continually(text(s"$com")).
+    Stream.continually(text(com)).
       take(all.size).
       zip(all.map { a => text(a.dropWhile(_.isMajorIdentifier).string(" ")(_.show)) }).
       map {
@@ -103,6 +103,7 @@ object Man {
   }
 
   def makeText(formatters: TraversableOnce[Formatter[Char]]): String = formatters.foldLeft(Vector.empty[Char]) { (acc, frmt) => acc ++ frmt.run }.mkString("")
+  def makeText(f: Formatter[Char]): String = makeText(List(f))
 
   def whenEmpty(v: Vector[Formatter[Char]])(txt: => String): Vector[Formatter[Char]] = {
     if (v.isEmpty) Vector(text(txt))

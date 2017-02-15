@@ -2,7 +2,6 @@ package core
 
 import core.Implicits._
 import core.DSL._
-import core.Store._
 
 object Main {
   def main(args: Array[String]) = {
@@ -27,9 +26,8 @@ object Main {
 
     val shiftLeftOp = (shift - left - r - bool) (x => println(x))
 
-    val shiftLeftOp2 = (shift - left - r - a)(() => println("HA"))
-    val store = Store.empty +> addUnnamed +> addUnnamedRec +> addNamed +> addAssigned +> shiftArgs +> shiftOpt +> shiftLeft +> shiftLeftOp +> shiftLeftOp2
-
+    val shiftLeftOp2 = (shift - left - r - a)(() => "ja")
+    val cli = Cli(addUnnamed, addUnnamedRec, addNamed, addAssigned, shiftArgs, shiftOpt, shiftLeft, shiftLeftOp, shiftLeftOp2)
 
 
 //    Interpreter.
@@ -38,8 +36,8 @@ object Main {
 //      fold(println)(_ foreach println)(println)
 
     Interpreter.
-      interpretH(store).
-      run(List("shift", "--help")).
+      interpretH(cli).
+      run(List("add", "1", "x")).
       fold(println)(_ foreach println)(println)
 
   }

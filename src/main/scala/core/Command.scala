@@ -65,7 +65,7 @@ sealed trait CmdBld[+A] {
 }
 
 private[core]
-class Cmd[A](val syntax: Tree[Denot], program: Typer[A]) extends CmdBld[A] {
+class Cmd[+A](val syntax: Tree[Denot], program: Typer[A]) extends CmdBld[A] {
   def run(args: List[String]): Result[A] = program.run(args)._2
 }
 

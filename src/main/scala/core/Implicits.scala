@@ -1,7 +1,9 @@
 package core
 
 import core.Read.Result
+
 import scala.collection.generic.CanBuildFrom
+import scala.language.implicitConversions
 import scalaz.syntax.validation._
 import scalaz.syntax.applicative._
 
