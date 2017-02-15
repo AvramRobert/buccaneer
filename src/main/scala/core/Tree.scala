@@ -3,12 +3,20 @@ package core
 import core.Read.Result
 
 import scala.annotation.tailrec
-import scalaz.Applicative
+import scalaz.{Applicative, Equal, Traverse}
 import scalaz.syntax.applicative._
 
-// TODO: Test
 object Tree {
   def apply[A](a: A): Tree[A] = Node(a)
+  def empty[A]: Tree[A] = Leaf
+
+  lazy implicit val traverse: Traverse[Tree] = new Traverse[Tree] {
+    override def traverseImpl[G[_], A, B](fa: Tree[A])(f: (A) => G[B])(implicit evidence$1: Applicative[G]) = fa traverse f
+  }
+
+  implicit def equal[A]: Equal[Tree[A]] = new Equal[Tree[A]] {
+    override def equal(a1: Tree[A], a2: Tree[A]) = a1 == a2 //naive
+  }
 }
 // It may be perhaps a good idea to turn this into a Vector[Denot] -> Some things would become MUCH simpler and faster
 sealed trait Tree[+A] {
@@ -96,7 +104,7 @@ sealed trait Tree[+A] {
   }
 
   private final def infixP[X](ths: Tree[X], tht: Tree[X]): Tree[X] = ths match {
-    case Node(v, lt, Leaf) => Node(v, affixP(lt, tht))
+    case Node(v, lt, Leaf) => Node(v, infixP(lt, tht))
     case Node(v, lt, rt) => Node(v, lt, infixP(rt, tht))
     case Leaf => tht
   }

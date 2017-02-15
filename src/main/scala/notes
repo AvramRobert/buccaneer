@@ -8,7 +8,7 @@ I may perhaps not really need `Tree`. Everything implemented so far is actually 
 === To implement ===
 1. Command component descriptions // done
 2. Man page API // done
-3. Partial refactoring
+3. Partial refactoring // done
 4. Tests
 5. Documentation
 

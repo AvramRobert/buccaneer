@@ -25,16 +25,22 @@ object Main {
 
     val shiftLeft = (shift - left - bool) (x => println(x))
 
-    val store = Store.empty +> addUnnamed +> addUnnamedRec +> addNamed +> addAssigned +> shiftArgs +> shiftOpt +> shiftLeft
+    val shiftLeftOp = (shift - left - r - bool) (x => println(x))
 
-    Interpreter.
-      interpret(addNamed).
-      run(List("add", "a", "1", "b", "1")).
-      fold(println)(_ foreach println)(println)
+    val shiftLeftOp2 = (shift - left - r - a)(() => println("HA"))
+    val store = Store.empty +> addUnnamed +> addUnnamedRec +> addNamed +> addAssigned +> shiftArgs +> shiftOpt +> shiftLeft +> shiftLeftOp +> shiftLeftOp2
+
+
 
 //    Interpreter.
-//      interpretH(store).
-//      run(List("add", "a", "2", "--sgst")).
+//      interpret(addNamed).
+//      run(List("add", "a", "1", "b", "1")).
 //      fold(println)(_ foreach println)(println)
+
+    Interpreter.
+      interpretH(store).
+      run(List("shift", "left", "-r", "a")).
+      fold(println)(_ foreach println)(println)
+
   }
 }
