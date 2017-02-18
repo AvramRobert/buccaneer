@@ -17,16 +17,6 @@ package object core {
     override def map[A, B](fa: Step[A])(f: (A) => B) = fa map f
   }
 
-  implicit lazy val lexicalChar: Lexical[Char] = new Lexical[Char] {
-    override def blank = ' '
-
-    override def break = '\n'
-
-    override def continuation = '-'
-
-    override def eq(a1: Char, a2: Char) = a1 == a2
-  }
-
   implicit lazy val applyResult: Apply[Result] = new Apply[Result] {
     override def ap[A, B](fa: => Result[A])(f: => Result[(A) => B]) = fa ap f
 

@@ -37,7 +37,7 @@ object Main {
 
     Interpreter.
       interpretH(cli).
-      run(List("add", "1", "x")).
+      run(List("add", "--help")).
       fold(println)(_ foreach println)(println)
 
   }
