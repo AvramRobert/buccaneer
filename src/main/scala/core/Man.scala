@@ -26,7 +26,7 @@ object Man {
       push(config.indentation).
       every.
       ofWidth(config.indentation + fsize(config)).
-      fillAll
+      fill
   }
 
   def columned(left: String, right: String, largest: Int): Section[Formatter] = for {
@@ -74,7 +74,7 @@ object Man {
       zip(all.map { a => text(a.dropWhile(_.isMajorIdentifier).string(" ")(_.show)) }).
       map {
         case (left, right) =>
-          (left absorbT right).
+          (left concat right).
             coeval.
             push(config.indentation - 1).
             ofWidth(config.textWidth)
@@ -103,6 +103,7 @@ object Man {
   }
 
   def makeText(formatters: TraversableOnce[Formatter]): String = formatters.foldLeft(Vector.empty[Char]) { (acc, frmt) => acc ++ frmt.runH }.mkString("")
+
   def makeText(f: Formatter): String = makeText(List(f))
 
   def whenEmpty(v: Vector[Formatter])(txt: => String): Vector[Formatter] = {
@@ -187,17 +188,14 @@ object Formatter {
   private[core]
   sealed trait Formatter {
     protected def data: Vector[Char]
+
     def width: Int
 
-    def blank: Char = ' '
+    val blank: Char = ' '
 
-    def break: Char = '\n'
+    val break: Char = '\n'
 
-    def hyphen: Char = '-'
-
-    def isBlank(c: Char): Boolean = c == blank
-
-    def isHyphen(c: Char): Boolean = c == hyphen
+    val hyphen: Char = '-'
 
     def breadth: Int = data.size
 
@@ -229,130 +227,117 @@ object Formatter {
       endo(f => (v: Vector[Char]) => go(v, f, amount))
     }
 
+    def repeatWhile(p: Vector[Char] => Boolean): Formatter = {
+      @tailrec def go(v: Vector[Char], f: Format[Char]): Vector[Char] = {
+        if (p(v)) go(f(v), f)
+        else v
+      }
+
+      endo(f => (v: Vector[Char]) => go(v, f))
+    }
+
     def widen(f: Int => Int): Formatter = fold[Formatter](e => e.copy(width = f(e.width)))(m => m.copy(width = f(m.width)))
 
-    def assimilate(data: Vector[Char]): Formatter = continue(_ ++ data)
+    def appendWhile(p: Vector[Char] => Boolean)(c: Char): Formatter = coeval.append(c).repeatWhile(p)
 
-    def fill(n: Int): Formatter = {
-      val (data, width) = evaluate
-      Formatter(data ++ (0 until n).map(_ => blank).toVector).ofWidth(width)
-    }
+    def fill(n: Int): Formatter = concat(emptyN(n))
 
-    @tailrec final def fillAll: Formatter = {
-      val n = breadth % width
-      if (n != 0) fill(1).fillAll
-      else this
-    }
+    //This is essentially the place where monads would come in handy
+    //In this scenario, if i do not pre-evaluate the thing, it will repeat the total formatting function, as
+    // it is not limited to only the last operation. So if i do something like formatter.prepend('c').fill(1).repeat(3) ;
+    // it is going to both prepend 'c' and fill once 3 times on all lines.
+    // The point of a monad in this case would be to isolate the context and allow for things to compose
+    // without them affecting each other.
+    def fill: Formatter = appendWhile(_.size < width)(blank).every
 
     def push(n: Int): Formatter = prepend(blank).repeat(n)
 
-    def evaluate: (Vector[Char], Int) = this match {
+    def evaluate: Vector[Char] = this match {
       case Every(data, f, width) => More(data, f, width, 0, All).evaluate
       case More(data, f, width, at, All) if at < data.size => More(data, f, width, 0, Few(totalLines)).evaluate
       case More(data, f, width, at, Few(i)) if at < data.size && i > 0 =>
         val cursor = (data grouped width).toVector
-        ((cursor.take(at) ++ cursor.slice(at, at + i).map(f) ++ cursor.drop(at + i)).flatten, width)
-      case More(data, _, width, _, _) => (data, width)
+        (cursor.take(at) ++ cursor.slice(at, at + i).map(f) ++ cursor.drop(at + i)).flatten
+      case More(data, _, _, _, _) => data
     }
 
-    def evaluateH: (Vector[Char], Int) = {
-      val (data, width) = evaluate
-      (hyphenate(data, width), width)
-    }
+    def evaluateH: Vector[Char] = hyphenate.evaluate
 
-    def absorb(absorbee: Formatter): Formatter = {
-      val max = List(width, absorbee.width).max
-      coeval
-        .assimilate(
-          absorbee.evaluate._1)
-        .ofWidth(max)
+    def concat(that: Formatter): Formatter = coeval.fold[Formatter] {
+      every => every.copy(data = every.data ++ that.evaluate)
+    } {
+      more => more.copy(data = more.data ++ that.evaluate)
     }
-
-    def absorbT(absorbee: Formatter): Formatter = absorb(absorbee).ofWidth(width + absorbee.width)
 
     // This should describe what needs to happen, not actually do it
-    def interleave(f2: Formatter): Formatter = {
-      val (left, lwidth) = evaluate
-      val (right, rwidth) = f2.evaluate
-
-      Formatter(left.grouped(lwidth)
-        .zip(right.grouped(rwidth))
-        .flatMap(v => v._1 ++ v._2)
-        .toVector)
-        .widen(_ => lwidth + rwidth)
+    def interleave(that: Formatter): Formatter = {
+      Formatter(
+        evaluate.
+          grouped(width).
+          zip(that.evaluate.grouped(that.width))
+          .flatMap(v => v._1 ++ v._2)
+          .toVector)
+        .widen(_ => width + that.width)
     }
 
     def emptyN(n: Int): Formatter = {
       if (n <= 0) Formatter.empty
-      Formatter(Vector(blank)).prepend(blank).repeat(n - 1)
+      Formatter.empty.append(blank).repeat(n - 1)
     }
 
-    def normalise(f2: Formatter): (Formatter, Formatter) = {
+    //TODO: Vector() should be the identity in this thing! fill(0) for example actually fills the bloody thing with one value (' ')
+    def equate(that: Formatter): (Formatter, Formatter) = {
       def pad(larger: Formatter, smaller: Formatter) = {
-        val amount = (larger.totalLines * smaller.width) - smaller.breadth
-        (larger.fillAll, smaller.fill(amount))
+        val diff = larger.totalLines - smaller.totalLines
+        if(diff == 0) (larger.fill, smaller.fill)
+        else (larger.fill, smaller.fill.fill(diff * smaller.width))
       }
 
-      if (totalLines >= f2.totalLines) pad(this, f2)
-      else pad(f2, this).swap
+      if (totalLines >= that.totalLines) pad(this, that)
+      else pad(that, this).swap
     }
 
-    def align(f2: Formatter, distance: Int): Formatter = {
-      val (nf1, nf2) = normalise(f2)
-      val empty = emptyN(nf1.totalLines * distance).ofWidth(distance)
-      nf1.coevalH interleave empty interleave nf2.coevalH
+    def align(that: Formatter, distance: Int): Formatter = {
+      val (h1, h2) = coevalH equate that.coevalH
+
+      val empty = emptyN(h1.totalLines * distance).ofWidth(distance)
+      h1 interleave empty interleave h2
     }
+
+    def withLines: Formatter = append(break)
 
     def ofWidth(i: Int): Formatter = widen(_ => i)
 
-    def run: Vector[Char] = withLines.every.evaluate._1
+    def run: Vector[Char] = withLines.every.evaluate
+
     def runH: Vector[Char] = coevalH.run
 
-    /*
-     // Almost works properly.. if however something like the following occurs:
-          Hello my n
-          ame is Robert.
-
-          That becomes this:
-
-          Hello my -
-          name is Robert
-     */
-    def hyphenate(v: Vector[Char], width: Int) = {
-      @tailrec def go(hyphenated: Vector[Char], rem: Vector[Char]): Vector[Char] = rem match {
-        case _ if rem.isEmpty => hyphenated
-        case _ if hyphenated.isEmpty => go(rem.take(width), rem.drop(width))
-        case _ =>
-          val current = rem.take(width)
-          val n = if (current.size < width) 0 else 1
-          if (!isBlank(hyphenated.last) && !isHyphen(hyphenated.last) && !isBlank(current.head)) {
-            go(hyphenated
-              .dropRight(1)
-              .:+(hyphen)
-              .++(hyphenated.last +: current)
-              .dropRight(n), rem.drop(width - n))
-          }
-          else go(hyphenated ++ current, rem.drop(width))
+    def hyphenate: Formatter = {
+      @tailrec def go(rem: Vector[Char], h: Vector[Char] = Vector()): Vector[Char] = {
+        if (rem.isEmpty) h
+        else (h, rem) match {
+          case (_ :+ `blank`, `blank` +: _) => go(rem.drop(width), h ++ rem.take(width))
+          case (_, `blank` +: _) => go(rem.drop(width), h ++ rem.take(width))
+          case (_ :+ `blank`, _) => go(rem.drop(width), h ++ rem.take(width))
+          case (_ :+ `hyphen`, _) => go(rem.drop(width), h ++ rem.take(width))
+          case (_, `hyphen` +: _) => go(rem.drop(width), h ++ rem.take(width))
+          case (a :+ `blank` :+ c, b) => go(c +: b, a :+ blank :+ blank)
+          case (a :+ c1, c2 +: b) => go(c1 +: c2 +: b, a :+ hyphen)
+          case _ => go(rem.drop(width), h ++ rem.take(width))
+        }
       }
 
-      go(Vector(), v)
+      Formatter(go(evaluate)).ofWidth(width)
     }
 
-    def coeval: Formatter = {
-      val (data, width) = evaluate
-      Formatter(data).ofWidth(width)
-    }
+    def coeval: Formatter = Formatter(evaluate).ofWidth(width)
 
-    def coevalH: Formatter = {
-      val (data, width) = evaluateH
-      Formatter(data).ofWidth(width)
-    }
-
-    def withLines: Formatter = continue(_ :+ '\n')
+    def coevalH: Formatter = Formatter(evaluateH).ofWidth(width)
   }
 
   private[core]
   case class Every(data: Vector[Char], f: Format[Char], width: Int) extends Formatter
 
   case class More(data: Vector[Char], f: Format[Char], width: Int, at: Int, n: Cardinality) extends Formatter
+
 }
