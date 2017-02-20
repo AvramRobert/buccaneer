@@ -20,3 +20,22 @@ Future features:
 2. User-defined meta-parametrisations // should be somewhat easy
 3. Indexing errors by their positions while validating // should also be somewhat easy
 4. Variable arguments of one particular type (or for example variable arguments of key-value pairs)
+
+Improvements:
+
+Formatter:
+    Idea: Define a formatter in terms of what can be done at each line.
+     One such formatter would have three specific cases, that would need handling:
+       1. Apply some formatting at every line of the input.
+       2. Apply some formatting at some subset of lines of the input.
+       3. Apply some formatting at one specific line of the input.
+     Additionally, there could also exist some transitive relation between formats. For example one line might be formatted in
+     relation to the previous one. (this is for example the case in hyphenation)
+     This would therefore imply some context dependency and might lead to the formation of a Monad.
+
+     Possible monad definitions:
+     a) A Monad may be formed by relating one homologous formatting to another. `bind` might describe taking the line, formatting it and
+     then using the formatted line to create another formatter that formats it some other way.
+     b) A Monad may be formed by relating lines together. For example, given some sub-sequence `F[A]` representing
+     a previous line, i can `flatMap` it to create another formatter that formats the `NEXT` line in relation
+     to that one.

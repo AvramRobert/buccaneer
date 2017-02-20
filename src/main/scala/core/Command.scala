@@ -16,6 +16,9 @@ trait CommandOps {
   def assignment[A: Read](label: Sym): TypedIdentifier[A] = typedId(label, proof)
 }
 
+/** A builder DSL for commands, that concretely encodes function arity up to 12 types.
+  * The arity stops at 12, because the `apply`-function in scalaz' `Applicative`  only goes up to 12.
+  */
 private[core]
 object CmdBld {
   type Typer[A] = IndexedState[List[String], List[String], Result[A]]

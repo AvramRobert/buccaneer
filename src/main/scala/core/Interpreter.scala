@@ -64,7 +64,7 @@ object Interpreter {
 
   def interpret[A](store: Cli[A]) = resolve(store.keySet) andThen runFrom(store)
 
-  def interpretH[A](store: Cli[A], helpConfig: HelpConfig = HelpConfig(150, 5, 5)) =
+  def interpretH[A](store: Cli[A], helpConfig: ManConfig = ManConfig(150, 5, 5)) =
     meta(store, helpConfig) andThen resolve(store.keySet) andThen runFrom(store)
 
   def resolve(all: Set[Shape]) =
@@ -78,7 +78,7 @@ object Interpreter {
       pick
 
 
-  def meta[A](store: Cli[A], helpConfig: HelpConfig) = phase { (input: List[String]) =>
+  def meta[A](store: Cli[A], helpConfig: ManConfig) = phase { (input: List[String]) =>
     def show(f: (List[String], Set[Shape]) => Section[String]): Step[Nothing] = {
       lazy val command = input.dropRight(1)
       partialMatch(store.keySet, command) match {
