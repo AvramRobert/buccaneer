@@ -29,7 +29,7 @@ object Main {
     val shiftLeftOp2 = (shift - left - r - a)(() => "ja")
     val cli = Cli(addUnnamed, addUnnamedRec, addNamed, addAssigned, shiftArgs, shiftOpt, shiftLeft, shiftLeftOp, shiftLeftOp2)
 
-
+println(shiftLeft.syntax.string(" ")(_.show))
 //    Interpreter.
 //      interpret(addNamed).
 //      run(List("add", "a", "1", "b", "1")).

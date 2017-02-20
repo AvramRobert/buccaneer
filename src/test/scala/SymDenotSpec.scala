@@ -28,8 +28,8 @@ class SymDenotSpec extends DefaultTestSuite {
       forAll { (id: String, text: String) =>
         val sym = Label(id)
         Denot.id(sym).mapDocs(_.mapMsg(_ => text)).docs.msg == text
-        Denot.typing[Int](intsReified).mapDocs(_.mapMsg(_ => text)).docs.msg == text
-        Denot.typedId[Int](sym, intsReified).mapDocs(_.mapMsg(_ => text)).docs.msg == text
+        Denot.typing[Int](readInt).mapDocs(_.mapMsg(_ => text)).docs.msg == text
+        Denot.typedId[Int](sym, readInt).mapDocs(_.mapMsg(_ => text)).docs.msg == text
       }
     }
   }
