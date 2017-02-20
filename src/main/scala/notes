@@ -9,7 +9,7 @@ I may perhaps not really need `Tree`. Everything implemented so far is actually 
 1. Command component descriptions // done
 2. Man page API // done
 3. Partial refactoring // done
-4. Tests
+4. Tests // done
 5. Documentation
 
 
@@ -19,3 +19,4 @@ Future features:
 1. User-defined type-conditions // should be easy
 2. User-defined meta-parametrisations // should be somewhat easy
 3. Indexing errors by their positions while validating // should also be somewhat easy
+4. Variable arguments of one particular type (or for example variable arguments of key-value pairs)

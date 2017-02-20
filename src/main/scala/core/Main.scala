@@ -11,6 +11,7 @@ object Main {
 
     val int = argument[Int].msg("Integer argument")
     val bool = argument[Boolean].msg("Boolean argument")
+    val map = assignment[Map[String, Int]]("values=").msg("Map argument")
     val a = option("a")
     val b = option("b")
     val r = option("-r" | "--r")
@@ -19,17 +20,15 @@ object Main {
     val addNamed = (add - a - int - b - int) (_ + _)
     val addAssigned = (add - assignment[Int]("a") - assignment[Int]("b")) (_ + _)
     val addUnnamedRec = (add - r - int - int) (_ + _)
+    val addMap = (add - map)(_.values.sum)
     val shiftArgs = (shift - bool - argument[String]) ((_, _) => println("YA"))
     val shiftOpt = (shift - r - bool) (x => println(x))
-
     val shiftLeft = (shift - left - bool) (x => println(x))
-
     val shiftLeftOp = (shift - left - r - bool) (x => println(x))
-
     val shiftLeftOp2 = (shift - left - r - a)(() => "ja")
-    val cli = Cli(addUnnamed, addUnnamedRec, addNamed, addAssigned, shiftArgs, shiftOpt, shiftLeft, shiftLeftOp, shiftLeftOp2)
 
-println(shiftLeft.syntax.string(" ")(_.show))
+    val cli = Cli(addUnnamed, addUnnamedRec, addNamed, addAssigned, addMap, shiftArgs, shiftOpt, shiftLeft, shiftLeftOp, shiftLeftOp2)
+
 //    Interpreter.
 //      interpret(addNamed).
 //      run(List("add", "a", "1", "b", "1")).
@@ -37,7 +36,7 @@ println(shiftLeft.syntax.string(" ")(_.show))
 
     Interpreter.
       interpretH(cli).
-      run(List("add", "--help")).
+      run(List("add", "--sgst")).
       fold(println)(_ foreach println)(println)
 
   }
