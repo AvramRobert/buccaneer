@@ -3,7 +3,7 @@ package core
 import core.Man.Section
 import core.Read.Result
 import core.Cli.Cli
-
+import core.Read._
 import scalaz.syntax.applicative._
 import scalaz.syntax.validation._
 import scalaz.{Failure, Kleisli}
@@ -167,7 +167,7 @@ object Interpreter {
     def show(f: (List[String], Set[Shape]) => Section[String]): Step[Nothing] = {
       lazy val command = input.dropRight(1)
       partialMatch(cli.keySet, command) match {
-        case set if set.isEmpty => Transform(new Throwable("No command found matching input").failureNel)
+        case set if set.isEmpty => Transform(failure(new Throwable("No command found matching input")))
         case set => Meta(f(command, set).run(manConfig))
       }
     }
@@ -175,7 +175,7 @@ object Interpreter {
     input.last match {
       case "-help" | "--help" => show(Man.help)
       case "-sgst" | "--sgst" => show(Man.suggest)
-      case _ => Transform(input.successNel)
+      case _ => Transform(success(input))
     }
   }
 
@@ -198,7 +198,7 @@ object Interpreter {
     * @return an interpretation step
     */
   def filter(f: AST => Boolean) = transform { (commands: List[AST]) =>
-    commands.filter(f).successNel
+    success(commands.filter(f))
   }
 
   /** Applies a validation function on a list of interpolated command
@@ -209,7 +209,7 @@ object Interpreter {
     * @return an interpretation step
     */
   def validate(f: ((Denot, String)) => Result[(Denot, String)]) = transform { (commands: List[AST]) =>
-    val point = List.empty[AST].successNel[Throwable]
+    val point = success(List.empty[AST])
     commands.map(_ validate f)
       .filter(_.isSuccess)
       .foldRight(point)((a, b) => (a |@| b) (_ :: _))
@@ -225,9 +225,9 @@ object Interpreter {
     */
   def pick = transform { (commands: List[AST]) =>
     commands match {
-      case h :: Nil => h.successNel
-      case Nil => new Throwable("No command found matching input").failureNel
-      case _ => new Throwable(s"Ambiguous input. ${commands.size} match given input").failureNel
+      case h :: Nil => success(h)
+      case Nil => failure(new Throwable("No command found matching input"))
+      case _ => failure(new Throwable(s"Ambiguous input. ${commands.size} match given input"))
     }
   }
 
@@ -240,7 +240,7 @@ object Interpreter {
     */
   def runFrom[A](cli: Cli[A]) = phase { (command: AST) =>
     val key = command map (_._1)
-    val fail = Transform(new Throwable("Unknown command").failureNel[A])
+    val fail = Transform(failure(new Throwable("Unknown command")))
 
     cli.get(key).fold[Step[A]](fail)(cmd => run(cmd).run(command))
   }
@@ -269,8 +269,8 @@ object Validators {
     case (TypedIdentifier(symbol, _, _), input) => symbol.find(v => input startsWith v)
     case _ => Some(Label(""))
   }).fold {
-    new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${assoc._1.show}").failureNel[(Denot, String)]
-  } { _ => assoc.successNel }
+    failure[(Denot, String)](new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${assoc._1.show}"))
+  } { _ => success(assoc) }
 
   /** Function for validation the type of an input against its expectation.
     *
@@ -280,6 +280,6 @@ object Validators {
   def types(assoc: (Denot, String)) = assoc match {
     case (Typing(proof, _), input) => proof(input).map(_ => assoc)
     case (TypedIdentifier(_, proof, _), input) => proof(input).map(_ => assoc)
-    case _ => assoc.successNel[Throwable]
+    case _ => success(assoc)
   }
 }
