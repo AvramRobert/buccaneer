@@ -36,7 +36,7 @@ object Main {
 
     Interpreter.
       interpretH(cli).
-      run(List("add", "--sgst")).
+      run(List("add", "1", "2")).
       fold(println)(_ foreach println)(println)
 
   }

@@ -51,7 +51,7 @@ sealed trait Step[+A] {
   def fold[B](success: A => B)
              (fail: List[Throwable] => B)
              (meta: String => B): B = this match {
-    case Transform(result) => result.fold(errs => fail(errs.list), success)
+    case Transform(result) => result.fold(errs => fail(errs.list.toList), success)
     case Meta(info) => meta(info)
   }
 }
@@ -280,6 +280,6 @@ object Validators {
   def types(assoc: (Denot, String)) = assoc match {
     case (Typing(proof, _), input) => proof(input).map(_ => assoc)
     case (TypedIdentifier(_, proof, _), input) => proof(input).map(_ => assoc)
-    case _ => assoc.successNel
+    case _ => assoc.successNel[Throwable]
   }
 }

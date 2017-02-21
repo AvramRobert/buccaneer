@@ -1,9 +1,12 @@
 package core
 
 import java.io.File
+
 import core.Read.Result
+
 import scala.collection.generic.CanBuildFrom
 import scala.language.implicitConversions
+import scala.util.control.NonFatal
 import scalaz.syntax.validation._
 import scalaz.syntax.applicative._
 
@@ -12,7 +15,7 @@ object Implicits {
     try {
       f(s).successNel
     } catch {
-      case e: Exception => e.failureNel
+      case NonFatal(t) => t.failureNel
     }
 
   implicit def stringToSym(s: String): Sym = Label(s)
@@ -22,11 +25,11 @@ object Implicits {
   implicit val readString: Read[String] = Read[String](_.successNel)
   implicit val readDouble: Read[Double] = Read[Double] { s =>
     if (s.contains(".")) unsafeCoerce(s)(_.toDouble)
-    else new NumberFormatException(s"Cannot read double value of '$s'").failureNel
+    else new Throwable(s"Cannot read double value of '$s'").failureNel
   }
   implicit val readFloat: Read[Float] = Read[Float] { s =>
     if (s.toLowerCase.contains("f")) unsafeCoerce(s)(_.toFloat)
-    else new NumberFormatException(s"Cannot read float value of '$s'").failureNel
+    else new Throwable(s"Cannot read float value of '$s'").failureNel
   }
 
   // I should probably add some syntactic characteristics to BigInts and BigDecimals in order to avoid ambiguity
