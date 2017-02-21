@@ -9,10 +9,41 @@ import CmdBld._
 trait CommandOps {
   implicit def dsl(identifier: Identifier): Cmd0 = new Cmd0(Tree(identifier))
 
+  /** Picks a `Read` instance from implicit scope
+    *
+    * @param read read instance to pick
+    * @tparam A type of `Read`
+    * @return `Read` instance
+    */
   def proof[A](implicit read: Read[A]): Read[A] = read
+
+  /** Creates a command identifier.
+    *
+    * @param label command name as symbol
+    * @return identifier denotation
+    */
   def command(label: Sym): Identifier = id(label, isMajor = true)
+
+  /** Creates an option identifier.
+    *
+    * @param label option name as symbol
+    * @return identifier denotation
+    */
   def option(label: Sym): Identifier = id(label)
+
+  /** Creates a type argument.
+    *
+    * @tparam A desired type
+    * @return typing denotation
+    */
   def argument[A: Read]: Typing[A] = typing(proof)
+
+  /** Creates an association between an identifier and a type.
+    *
+    * @param label identifier name as symbol
+    * @tparam A desired type
+    * @return typed identifier denotation
+    */
   def assignment[A: Read](label: Sym): TypedIdentifier[A] = typedId(label, proof)
 }
 

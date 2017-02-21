@@ -5,14 +5,6 @@ Because commands are binary trees, can't I use a huffman encoding to serialise t
 2.
 I may perhaps not really need `Tree`. Everything implemented so far is actually pretty linear.
 
-=== To implement ===
-1. Command component descriptions // done
-2. Man page API // done
-3. Partial refactoring // done
-4. Tests // done
-5. Documentation
-
-
 =====================
 Future features:
 

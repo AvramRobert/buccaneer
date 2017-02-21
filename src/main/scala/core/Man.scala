@@ -6,7 +6,14 @@ import scala.annotation.tailrec
 import scalaz.Reader
 
 trait ManOps {
-  def helpConfig(textWidth: Int, indentation: Int, columnSpacing: Int): ManConfig = ManConfig(textWidth, indentation, columnSpacing)
+  /** Convenience factory function for creating a `ManConfig` record.
+    *
+    * @param textWidth desired text width per block of text
+    * @param indentation desired indentation per line
+    * @param columnSpacing desired spacing between columns of text
+    * @return
+    */
+  def manConfig(textWidth: Int, indentation: Int, columnSpacing: Int): ManConfig = ManConfig(textWidth, indentation, columnSpacing)
 }
 
 /** A record containing various parameters for configuring the aesthetic of a MAN page.
