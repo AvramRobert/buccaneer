@@ -2,7 +2,7 @@ package core
 
 import core.Denot.{id, typedId, typing}
 import core.Read.Result
-import scalaz.syntax.validation._
+import core.Read._
 import scalaz.{Apply, IndexedState, State}
 import CmdBld._
 
@@ -92,7 +92,7 @@ sealed trait CmdBld[+A] {
         .find(value => s startsWith value)
         .map(label => s drop label.value.length)
         .map(tid.proof.apply)
-        .getOrElse(new Throwable(s"Could not prove that the value of ${tid.symbol.show} is of the desired type").failureNel)
+        .getOrElse(failure(new Throwable(s"Could not prove that the value of ${tid.symbol.show} is of the desired type")))
     }
     f(Tree(typedId(tid.symbol, newProof)), coerce(newProof))
   }
@@ -111,7 +111,7 @@ class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
 
   def -[A](tid: TypedIdentifier[A]): Cmd1[A] = makeTId(tid) { (syntax, types) => new Cmd1(syntax0 affix syntax, types) }
 
-  def apply[A](f: () => A): Cmd[A] = new Cmd(syntax0, coerce(_ => f().successNel))
+  def apply[A](f: () => A): Cmd[A] = new Cmd(syntax0, coerce(_ => success(f())))
 
   class Cmd1[A](syntax1: Tree[Denot], types1: Typer[A]) extends CmdBld[A] {
     def -(id: Identifier): Cmd1[A] = makeId(id) { syntax => new Cmd1(syntax1 affix syntax, types1) }

@@ -85,7 +85,7 @@ class InterpreterSpec extends DefaultTestSuite {
 
     "match commands partially" in {
       forAll { (name: String, int: Int, bool: Boolean, string: String, f: (Int, Int) => Int, g: Boolean => Boolean) =>
-        whenever(name != string) {
+        whenever((name != string) && name.trim.nonEmpty && string.trim.nonEmpty) {
           val h = (x: Boolean, y: Int, z: Int) => g(x) && f(y, z) > 0
           val cmd1 = (command(name) - argument[Int] - argument[Int]) (f)
           val cmd2 = (command(name) - assignment[Boolean](string)) (g)
