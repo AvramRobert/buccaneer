@@ -5,13 +5,9 @@ import java.io.File
 import core.Read._
 import scala.collection.generic.CanBuildFrom
 import scala.language.implicitConversions
-import scala.util.control.NonFatal
 import scalaz.syntax.applicative._
 
 object Implicits {
-  def unsafeCoerce[A](s: String)(f: String => A): Result[A] =
-    try { success(f(s)) } catch { case NonFatal(t) => failure(t) }
-
   implicit def stringToSym(s: String): Sym = Label(s)
 
   implicit val readInt: Read[Int] = Read[Int](unsafeCoerce(_)(_.toInt))
@@ -22,13 +18,16 @@ object Implicits {
     else failure(new Throwable(s"Cannot read double value of '$s'"))
   }
   implicit val readFloat: Read[Float] = Read[Float] { s =>
-    if (s.toLowerCase.contains("f")) unsafeCoerce(s)(_.toFloat)
+    if (s.toLowerCase.endsWith("f")) unsafeCoerce(s)(_.toFloat)
     else failure(new Throwable(s"Cannot read float value of '$s'"))
   }
 
-  // I should probably add some syntactic characteristics to BigInts and BigDecimals in order to avoid ambiguity
+  // I should probably add some syntactic characteristics to BigInts in order to avoid ambiguity
   implicit val readBigInt: Read[BigInt] = Read[BigInt](unsafeCoerce(_)(x => BigInt(x)))
-  implicit val readBigDecimal: Read[BigDecimal] = Read[BigDecimal](unsafeCoerce(_)(x => BigDecimal(x)))
+  implicit val readBigDecimal: Read[BigDecimal] = Read[BigDecimal] { s =>
+    if(s.toLowerCase.endsWith("d")) unsafeCoerce(s.dropRight(1))(x => BigDecimal(x.toString))
+    else failure(new Throwable(s"Cannot read big decimal value of '$s'"))
+  }
 
   implicit val readFile: Read[File] = Read[File](unsafeCoerce(_)(x => new File(x)))
 

@@ -1,12 +1,17 @@
 name := "buccaneer"
 
-version := "1.0"
+version := "0.1.0"
 
 scalaVersion := "2.11.8"
 
 resolvers ++= Seq(
   Resolver.sonatypeRepo("releases"),
   Resolver.sonatypeRepo("snapshots")
+)
+
+scalacOptions ++= Seq(
+  "-language:higherKinds",
+  "-language:implicitConversions"
 )
 
 libraryDependencies ++= Seq(
