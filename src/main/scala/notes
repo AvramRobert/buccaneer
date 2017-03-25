@@ -5,6 +5,13 @@ Because commands are binary trees, can't I use a huffman encoding to serialise t
 2.
 I may perhaps not really need `Tree`. Everything implemented so far is actually pretty linear.
 
+
+=====================
+TODO:
+1. Add publishing configuration to this project and publish to Maven/Bintray
+2. Create a new project for the sbt plugin and import add buccaneer
+3. Combine buccaneer API with the sbt.Command API
+
 =====================
 Future features:
 
