@@ -124,5 +124,5 @@ def main(args: Array[String]): Unit = {
   runPrintH(args.toList)
 }
 ```
-Some more concrete and extended examples can be found in the `examples` package.
-To read about the full capabilities of this library, please take a look at `<docs>`.
+Some more concrete and extended examples can be found in the [examples](src/main/scala/examples) package.
+To read about the full capabilities of this library, please take a look at the [docs](docs/documentation.md).
