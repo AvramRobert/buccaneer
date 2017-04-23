@@ -150,7 +150,7 @@ object Interpreter {
     interpolate(all) andThen
       filter(_.rootOf[(Denot, String)] {
         case (Identifier(Label(value), _, _), input) => input == value
-        case _ => false
+        case _ => true
       }) andThen
       validate(syntax) andThen
       validate(types) andThen

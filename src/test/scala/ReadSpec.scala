@@ -40,7 +40,7 @@ class ReadSpec extends DefaultTestSuite {
 
     "read big decimals" in {
       forAll { (d: BigDecimal) =>
-        readBigDecimal(d.toString) shouldBe Success(d)
+        readBigDecimal(s"${d}d") shouldBe Success(d)
       }
     }
 

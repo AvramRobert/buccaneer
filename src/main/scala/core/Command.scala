@@ -7,7 +7,9 @@ import scalaz.{Apply, IndexedState, State}
 import CmdBld._
 
 trait CommandOps {
-  implicit def dsl(identifier: Identifier): Cmd0 = new Cmd0(Tree(identifier))
+  implicit def dslFromId(identifier: Identifier): Cmd0 = new Cmd0(Tree(identifier))
+  implicit def dslFromTyping[A](typing: Typing[A]): Cmd0#Cmd1[A] = new Cmd0(Leaf).-(typing)
+  implicit def dslFromTypedId[A](typedId: TypedIdentifier[A]): Cmd0#Cmd1[A] = new Cmd0(Leaf).-(typedId)
 
   /** Picks a `Read` instance from implicit scope
     *
