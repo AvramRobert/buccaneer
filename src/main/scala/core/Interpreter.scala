@@ -4,6 +4,7 @@ import core.Man.Section
 import core.Read.Result
 import core.Cli.Cli
 import core.Read._
+
 import scalaz.syntax.applicative._
 import scalaz.syntax.validation._
 import scalaz.{Failure, Kleisli}
@@ -54,6 +55,20 @@ sealed trait Step[+A] {
     case Transform(result) => result.fold(errs => fail(errs.list.toList), success)
     case Meta(info) => meta(info)
   }
+
+  /** Prints the results of an interpretation
+    * It uses a pre-defined formatting for errors
+    * and prints them accordingly
+    */
+  def print: Unit = fold(println) {
+    errors =>
+      (Formatter(s"Command failed (${errors.size} errors):") ::
+        errors.
+          zipWithIndex.
+          map(t => Formatter(s"${t._2 + 1}. ${t._1.toString}").push(2))).
+        map(_.runMake).
+        foreach(println)
+  }(println)
 }
 
 /** Represents the outcome of a transformation step of the interpreter.

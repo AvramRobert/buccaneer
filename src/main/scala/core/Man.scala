@@ -177,7 +177,9 @@ object Man {
     * @param formatters formatters with formatted text
     * @return a string containing all formatted texts
     */
-  def makeText(formatters: TraversableOnce[Formatter]): String = formatters.foldLeft(Vector.empty[Char]) { (acc, frmt) => acc ++ frmt.runH }.mkString("")
+  def makeText(formatters: TraversableOnce[Formatter]): String = {
+    formatters.foldLeft(Vector.empty[Char]) { (acc, frmt) => acc ++ frmt.runH }.mkString("")
+  }
 
   /** Extracts the formatted text from a formatter.
     *
@@ -265,6 +267,7 @@ object Formatter {
   type Format[A] = Vector[A] => Vector[A]
 
   def apply(data: Vector[Char]): Formatter = More(data, identity, data.size, 0, Few(1))
+  def apply(text: String): Formatter = apply(text.toCharArray.toVector)
 
   def empty: Formatter = Formatter(Vector(' '))
 
@@ -346,7 +349,7 @@ object Formatter {
       */
     def every: Formatter = fold(identity)(x => Every(x.data, x.f, x.width))
 
-    /** Appies the formatting to just one the first line of its text.
+    /** Applies the formatting to just the first line of its text.
       *
       * @return a new formatter that applies its formatting to the first line of tex
       */
@@ -429,6 +432,7 @@ object Formatter {
     def evaluate: Vector[Char] = this match {
       case Every(data, f, width) => More(data, f, width, 0, All).evaluate
       case More(data, f, width, at, All) if at < data.size => More(data, f, width, 0, Few(totalLines)).evaluate
+      case More(data, f, 0, at, _) => f(data)
       case More(data, f, width, at, Few(i)) if at < data.size && i > 0 =>
         val cursor = (data grouped width).toVector
         (cursor.take(at) ++ cursor.slice(at, at + i).map(f) ++ cursor.drop(at + i)).flatten
@@ -516,6 +520,13 @@ object Formatter {
       * @return a new formatter containing the new line width
       */
     def ofWidth(i: Int): Formatter = widen(_ => i)
+
+    /** Runs the fromatting a returns a complete text
+      * as a String. Does not hyphenate
+      *
+      * @return the formatted text as a string
+      */
+    def runMake: String = run.mkString("")
 
     /** Runs the formatting and returns the complete text,
       * divided into lines, as a vector of characters. Does not hyphenate.

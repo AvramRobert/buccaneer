@@ -84,23 +84,34 @@ defines how a string should be converted to that
 particular type. The `bucanneer.core.Implicits` package already contains `Read[A]` instances 
 for a number of types. Please note, that some of them have some minor syntactic requirements in
 order to avoid ambiguity:
-* <b>String</b>
-* <b>Boolean</b> - "true" and "false"
-* <b>Int</b> - any natural number. E.g: 
-<br /> "1", "2", "553", "42". Note "1" is an Int, "1.0" is NOT
-* <b>Double</b> - any number with explicit decimal points. E.g:
-<br /> "1.0", "54.23", "102.2" etc
-* <b>Float</b> - any number ending with "f". E.g: 
- <br /> "1f", "2.5f", "2390.234f" etc. 
-* <b>BigInt</b> - any natural number. Same rules as for `Int` 
-* <b>BigDecimal</b> - any number ending in "d". E.g:
-<br /> "2d", "155.1230923829d", "1.0d" etc.
-* <b>Arbitrary collections</b> - comma-separated values. E.g:
-<br /> "2,3,4,5,6,7,8", "true,true,true,false,true" etc.
-* <b>Maps</b> - comma-separated assignments using "=". E.g:
-<br /> "a=4,b=5,c=7", "robert=true,carrie=false,lisa=false" etc.
-* <b>Files</b> - string paths. E.g:
-<br /> "/home/robert/Downloads"
+* **String**
+* **Boolean**
+    * "true" and "false"
+* **Int**
+    * any natural number
+    * Example: _1_ , _2_ , _3_ , _42_ .. <br /> 
+    **Note** _1_ is an `Int` but _1.0_ is **NOT**
+* **Double** 
+    * any number with explicit decimal points 
+    * Example: _1.0_, _54.23_, _102.2_ ..
+* **Float** 
+    * any number ending with "f" 
+    * Example: _1f_, _2.5f_, _2390.234f_ .. 
+* **BigInt** 
+    * any natural number
+    * Same rules as for `Int`.
+* **BigDecimal** 
+    * any number ending in "d"
+    * Example: _2d_, _155.1230923829d_, _1.0d_ ..
+* **Arbitrary collections**
+    * comma-separated values
+    * Example: _2,3,4,5,6,7,8_, _true,true,true,false,true_ ..
+* **Maps** 
+    * comma-separated assignments using "=" 
+    * Example: _a=4,b=5,c=7_, _robert=true,carrie=false,lisa=false_ ..
+* **Files** 
+    * string paths
+    * Example: _/home/myfiles/Downloads_
 
 You can however also define your own instances:
 ```scala
@@ -167,7 +178,7 @@ Interpreter.
 Interpreter.
   interpret(multiplier).
   run(badInput).
-  fold(println)(println)(println) // => List[Throwable](..)
+  fold(println)(println)(println) // => List[Throwable] => ...
 ```
 Right.. I'll show you in a second how you define a complete command
 line interface and run individual commands from it, but first I would like to address the `fold`.
@@ -185,9 +196,17 @@ interpretation yields some information about the command or the interface itself
 it is used for things like MAN pages and
 input suggestions. For example, in the case of a MAN page, the string value is the page itself.
 
-In most situations, the things you generally do with each of these is that you print them. 
-You might however want to perhaps modify before printing them. In any case, `fold` is used
-to concretely handle the result of the an interpretation. 
+In most situations, the thing you generally do with each of these is that you print them.
+Because this is somewhat the most common behaviour, buccaneer already provides a printing function that 
+prints the result of a command in a conveniently formatted way:
+```scala
+Intepreter.
+  interpret(multiplier).
+  run(badInput).
+  print
+```
+Should you however want to perhaps modify the result before printing, 
+then the `fold` allows you directly handle the result of an interpretation. 
 
 ### Creating a command line interface
 Now that we have commands and know how to run them, it is time to define a complete interface. 
@@ -215,7 +234,7 @@ val interpreter = Interpreter.interpret(interface)
 def run(input: List[String]) = {
   interpreter.
     run(input).
-    fold(println)(println)(println)
+    print
 }
 
 val input1 = List("subtract", "2", "1")
@@ -252,7 +271,7 @@ def print(input: List[String]) = {
 Interpreter.
   interpretH(interface).
   run(input).
-  fold(println)(println)(println)
+  print
 }
 ```
 Now, any time a command input ends with "-help" or "--help", 
@@ -284,7 +303,7 @@ def print(input: List[String]) = {
 Interpreter.
     interpretH(interface, myConfig).
     run(input).
-    fold(println)(println)(println)
+    print
 }
 ```
 

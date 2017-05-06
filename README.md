@@ -1,6 +1,6 @@
 buccaneer
 =
-A library for writing command line applications quickly and effortlessly. 
+A library(-ish) for writing command line applications quickly and effortlessly. 
 
 
 #### For the impatient
@@ -21,8 +21,8 @@ automatically grows with the number of type arguments your description requires.
 the command requires 2 ints and therefore the function arity is 2 with types `(Int, Int)`. 
 <br />
 
-To run the command, you need only feed it 
-to the command interpreter provided by the library:
+To run the command and print its result, you need only feed it 
+to the command interpreter provided by the library and call the appropriate functions:
 
 ```scala
 import buccaneer.core.Interpreter
@@ -30,25 +30,22 @@ import buccaneer.core.Interpreter
 val input = List("add", "1", "2")
 
 Interpreter.
-interpret(command).
-run(input).
-fold(println)(println)(println)
+  interpret(command).
+  run(input).
+  print
 ```
-The reason for the `fold` is because the result of running a command can be one of three things.
-Either:
-* <b>Success</b>: you receive the result of the command function
-* <b>Failure</b>: you receive a list of all the errors
-* <b>Meta</b>: you receive a string containing some meta-information. This case in particular
-is used for things like MAN pages and input suggestions (more on that later). 
-
 Any boilerplate associated with parsing, interpreting commands and propagating errors is done
 by the library. You need only concern yourself with actually implementing your commands.
 <br />
 All the primitives required to build commands are:
-* `command(<name>)` - represents a command or subcommand identifier
-* `argument[A]` - represents an argument of some type
-* `option(<name>)` - represents an option identifier
-* `assignment[A](<name>)` - represents an association between a name and a type (for things like `a=5`)
+* `command(<name>)` 
+    * a command or subcommand identifier
+* `argument[A]` 
+    * an argument of some type `A`
+* `option(<name>)` 
+    * an option identifier
+* `assignment[A](<name>)` 
+    * an association between a name and a type (for things like `a=5`)
 
 Compound things like Lists and Maps are just types, that you define as type arguments. For example: 
 ```scala
@@ -91,7 +88,7 @@ def runPrint(input: List[String]) = {
   Interpreter.
   interpret(interface).
   run(input).
-  fold(println)(println)(println)
+  print
 }
 
 runPrint(List("subtract", "2", "1"))
@@ -106,7 +103,7 @@ def runPrintH(input: List[String]) = {
   Interpreter.
   interpretH(interface).
   run(input).
-  fold(println)(println)(println)
+  print
 }
 
 runPrintH(List("subtract", "--help"))
@@ -117,12 +114,12 @@ runPrintH(List("subtract", "1", "--sgst"))
 And that's about it.
 You can now create arbitrarily large and complex command line interfaces. To bind this
 to any application, just pass the `args` your application receives to the interpreter.
-A simple example would be:
+For example:
 ```scala
 def main(args: Array[String]): Unit = {
   ...
   runPrintH(args.toList)
 }
 ```
-Some more concrete and extended examples can be found in the [examples](src/main/scala/examples) package.
-To read about the full capabilities of this library, please take a look at the [docs](docs/documentation.md).
+To read about the full capabilities of this library, please take a look at the [docs](docs/documentation.md). <br />
+Some more concrete and extended examples can be found in the [examples](src/main/scala/examples) package. 
