@@ -112,9 +112,11 @@ runPrintH(List("subtract", "--sgst"))
 runPrintH(List("subtract", "1", "--sgst"))
 ```
 And that's about it.
-You can now create arbitrarily large and complex command line interfaces. To bind this
-to any application, just pass the `args` your application receives to the interpreter.
-For example:
+You can now create arbitrarily large and complex command line interfaces. 
+Once you've defined one, you can feed it lists of arguments and run commands how and
+when you want. <br />
+To bind this
+to an application for example, just pass the `args` your application receives to the interpreter:
 ```scala
 def main(args: Array[String]): Unit = {
   ...

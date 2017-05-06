@@ -54,14 +54,17 @@ automatically defined by the elements in that signature. More concretely:
 ```
 Great. Now what about command options, or key-value associations?
 <br />
-Commands are built using only 4 primitives: 
-* `command(<label>)` - an identifier for command or sub-command names
-* `option(<label>)` - an identifier for options
-* `argument[A]` - an identifier for type arguments
-* `assignment[A](<label>)` - an identifier for associations between names and type arguments 
-(for things like `a=5`)
+Commands are built using only 4 primitives:
+* `command(<name>)` 
+    * a command or subcommand identifier
+* `argument[A]` 
+    * an argument of some type `A`
+* `option(<name>)` 
+    * an option identifier
+* `assignment[A](<name>)` 
+    * an association between a name and a type (for things like `a=5`)
 
-One important thing to note is that only `argument[A]` and `assignment[A](<label>)` actually bump  the arity 
+**Note**: `argument[A]` and `assignment[A](<label>)` bump the arity 
 of the associated function block. <br />
 So how'd you use them? Well:
 ```scala 
@@ -99,16 +102,16 @@ order to avoid ambiguity:
     * Example: _1f_, _2.5f_, _2390.234f_ .. 
 * **BigInt** 
     * any natural number
-    * Same rules as for `Int`.
+    * same rules as for `Int`
 * **BigDecimal** 
     * any number ending in "d"
     * Example: _2d_, _155.1230923829d_, _1.0d_ ..
 * **Arbitrary collections**
     * comma-separated values
-    * Example: _2,3,4,5,6,7,8_, _true,true,true,false,true_ ..
+    * Example: _2,3,4,5,6,7,8_ or _true,true,true,false,true_ ..
 * **Maps** 
     * comma-separated assignments using "=" 
-    * Example: _a=4,b=5,c=7_, _robert=true,carrie=false,lisa=false_ ..
+    * Example: _a=4,b=5,c=7_ or _robert=true,carrie=false,lisa=false_ ..
 * **Files** 
     * string paths
     * Example: _/home/myfiles/Downloads_
