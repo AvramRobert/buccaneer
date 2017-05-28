@@ -19,6 +19,17 @@ trait CommandOps {
     */
   def proof[A](implicit read: Read[A]): Read[A] = read
 
+  /**
+    * Picks a `Read` instance from implicit scope and
+    * transforms it into a constrained `Read`
+    *
+    * @param p predicate constraint on future value
+    * @param read read instance to pick
+    * @tparam A type of `Read`
+    * @return constrained `Read` instance
+    */
+  def proofWhen[A](p: A => Boolean)(implicit read: Read[A]): Read[A] = readWhen(proof)(p)
+
   /** Creates a command identifier.
     *
     * @param label command name as symbol
@@ -40,6 +51,15 @@ trait CommandOps {
     */
   def argument[A: Read]: Typing[A] = typing(proof)
 
+  /**
+    * Creates a constrained type argument.
+    *
+    * @param p predicate constraint on the future value
+    * @tparam A desired type
+    * @return typing denotation
+    */
+  def argument[A: Read](p: (A) => Boolean): Typing[A] = typing(proofWhen(p))
+
   /** Creates an association between an identifier and a type.
     *
     * @param label identifier name as symbol
@@ -47,6 +67,16 @@ trait CommandOps {
     * @return typed identifier denotation
     */
   def assignment[A: Read](label: Sym): TypedIdentifier[A] = typedId(label, proof)
+
+  /**
+    * Creates a constrained association between an identifier and a type.
+    *
+    * @param label identifier name as symbol
+    * @param p predicate constraint on future value
+    * @tparam A desired type
+    * @return typed identifier denotation
+    */
+  def assignment[A: Read](label: Sym, p: A => Boolean): TypedIdentifier[A] = typedId(label, proofWhen(p))
 }
 
 /** A builder DSL for commands, that concretely encodes function arity up to 12 types.

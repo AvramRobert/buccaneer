@@ -2,11 +2,32 @@ import java.io.File
 
 import core.Implicits._
 
+import core.Read.readWhen
 import scalaz.Success
 
 class ReadSpec extends DefaultTestSuite {
 
   "A Read typeclass" should {
+
+    "successfully constrain reads based on predicates" in {
+      forAll{ (i: Int) =>
+        val max = 100
+
+        whenever(i <= max) {
+          readWhen(readInt)(_ > max)(i.toString).isFailure shouldBe true
+        }
+      }
+    }
+
+    "successfully allow reads when constraints are met" in {
+      forAll { (i: Int) =>
+        val max = 100
+
+        whenever(i > max) {
+          readWhen(readInt)(_ > max)(i.toString) shouldBe Success(i)
+        }
+      }
+    }
 
     "successfully read correct string-encoded values" in {
       forAll { (i: Int) =>

@@ -3,7 +3,7 @@ package core
 import core.Read.Result
 
 import scala.util.control.NonFatal
-import scalaz.ValidationNel
+import scalaz.{NonEmptyList, ValidationNel}
 import scalaz.syntax.validation._
 
 object Read {
@@ -13,8 +13,11 @@ object Read {
     override def apply(a: String): Result[A] = f(a)
   }
   def read[A](f: String => Result[A]): Read[A] = Read[A](f)
-  def success[A](a: A) = a.successNel[Throwable]
-  def failure[A](t: Throwable) = t.failureNel[A]
+  def readWhen[A](r: Read[A])(p: A => Boolean): Read[A] = Read[A] { a =>
+    r(a).ensure(NonEmptyList(new Throwable("Unmet type constraint")))(p)
+  }
+  def success[A](a: A): Result[A] = a.successNel[Throwable]
+  def failure[A](t: Throwable): Result[A] = t.failureNel[A]
   def unsafeCoerce[A](s: String)(f: String => A): Result[A] =
     try { success(f(s)) } catch { case NonFatal(t) => failure(t) }
 }
