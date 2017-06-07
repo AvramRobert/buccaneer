@@ -10,6 +10,7 @@ import scalaz.syntax.applicative._
 object Implicits {
   implicit def stringToSym(s: String): Sym = Label(s)
 
+  implicit val readUnit: Read[Unit] = Read[Unit](_ => success(()))
   implicit val readInt: Read[Int] = Read[Int](unsafeCoerce(_)(_.toInt))
   implicit val readBool: Read[Boolean] = Read[Boolean](unsafeCoerce(_)(_.toBoolean))
   implicit val readString: Read[String] = Read[String](success)

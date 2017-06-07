@@ -56,19 +56,33 @@ sealed trait Step[+A] {
     case Meta(info) => meta(info)
   }
 
-  /** Prints the results of an interpretation
-    * It uses a pre-defined formatting for errors
-    * and prints them accordingly
+  /**
+    * Prints the results of an interpretation.
+    * It uses a pre-defined formatting for errors.
     */
-  def print: Unit = fold(println) {
-    errors =>
-      (Formatter(s"Command failed (${errors.size} errors):") ::
-        errors.
-          zipWithIndex.
-          map(t => Formatter(s"${t._2 + 1}. ${t._1.toString}").push(2))).
-        map(_.runMake).
-        foreach(println)
-  }(println)
+  def print: Unit = fold(println)(errs => formatErrors(errs) foreach println)(println)
+
+  /**
+    * Applies a side-effecting function on the success value of an
+    * iterpretation. Automatically prints errors and
+    * meta information with a predefined format.
+    *
+    * @param f side-effecting function
+    */
+  def foreach(f: A => Unit): Unit = fold(f)(errs => formatErrors(errs) foreach println)(println)
+
+  /**
+    * Minimalistic formatting for errors.
+    * @param errors the errors to be formatted
+    * @return a list of formatted strings
+    */
+  def formatErrors(errors: List[Throwable]): List[String] = {
+    (Formatter(s"Command failed (${errors.size} errors):") ::
+      errors.
+        zipWithIndex.
+        map(t => Formatter(s"${t._2 + 1}. ${t._1.toString}").push(2))).
+      map(_.runMake)
+  }
 }
 
 /** Represents the outcome of a transformation step of the interpreter.

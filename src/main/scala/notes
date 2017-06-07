@@ -19,8 +19,24 @@ Future features:
 2. User-defined meta-parametrisations // should be somewhat easy
 3. Indexing errors by their positions while validating // should also be somewhat easy
 4. Variable arguments of one particular type (or for example variable arguments of key-value pairs)
+5. Dependent argument. Check the value of one argument against the value of the previous argument
+6. Interactive mode, backed by the Cli itself
 
 Improvements:
+
+1. Compound denotations:
+   Example:
+     val int = argument[Int]
+     val min = option("-m") with int
+     ...
+     (.. - min - ..) { (.., int, ..) => }
+
+2. Implicit conversion for tuples of denotations => applier of functions
+   implicit class Denot2[A, B](x: (Denot[A], Denot[B])) {
+      def apply[C](f: (A, B) => C): C
+    }
+    ...
+    (min, max) { (min, max) => ... }
 
 Formatter:
     Idea: Define a formatter in terms of what can be done at each line.
