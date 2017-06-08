@@ -4,7 +4,7 @@ class FormatterSpec extends DefaultTestSuite {
 
   "A Formatter" should {
 
-    val config = ManConfig(10, 0, 1)
+    val config = ManConfig("cli", 10, 0, 1)
     //    "have an identity" in {
     //      forAll { (v: Vector[Char]) =>
     //        (Formatter(v) absorb Formatter.empty).evaluate._1 shouldBe v

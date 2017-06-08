@@ -13,7 +13,10 @@ trait ManOps {
     * @param columnSpacing desired spacing between columns of text
     * @return
     */
-  def manConfig(textWidth: Int, indentation: Int, columnSpacing: Int): ManConfig = ManConfig(textWidth, indentation, columnSpacing)
+  def manConfig(programTitle: String = "Unnamed",
+                textWidth: Int = 150,
+                indentation: Int = 5,
+                columnSpacing: Int = 5): ManConfig = ManConfig(programTitle, textWidth, indentation, columnSpacing)
 }
 
 /** A record containing various parameters for configuring the aesthetic of a MAN page.
@@ -22,7 +25,10 @@ trait ManOps {
   * @param indentation desired indentation per line
   * @param columnSpacing desired spacing between columns of text
   */
-case class ManConfig(textWidth: Int, indentation: Int, columnSpacing: Int)
+case class ManConfig(programName: String = "Unnamed",
+                     textWidth: Int = 150,
+                     indentation: Int = 5,
+                     columnSpacing: Int = 5)
 
 object Man {
 

@@ -124,9 +124,9 @@ sealed trait CmdBld[+A] {
         .find(value => s startsWith value)
         .map(label => s drop label.value.length)
         .map(tid.proof.apply)
-        .getOrElse(failure(new Throwable(s"Could not prove that the value of ${tid.symbol.show} is of the desired type")))
+        .getOrElse(failure(s"Could not prove that the value of ${tid.symbol.show} is of the desired type"))
     }
-    f(Tree(typedId(tid.symbol, newProof)), coerce(newProof))
+    f(Tree(tid.copy(proof = newProof)), coerce(newProof))
   }
 }
 
