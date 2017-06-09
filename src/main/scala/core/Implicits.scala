@@ -10,23 +10,25 @@ import scalaz.syntax.applicative._
 object Implicits {
   implicit def stringToSym(s: String): Sym = Label(s)
 
+  implicit val readUnit: Read[Unit] = Read[Unit](x => if(x.isEmpty) success(()) else failure("Cannot read non-unit value"))
   implicit val readInt: Read[Int] = Read[Int](unsafeCoerce(_)(_.toInt))
   implicit val readBool: Read[Boolean] = Read[Boolean](unsafeCoerce(_)(_.toBoolean))
   implicit val readString: Read[String] = Read[String](success)
+  implicit val readLong: Read[Long] = Read[Long](unsafeCoerce(_)(_.toLong))
   implicit val readDouble: Read[Double] = Read[Double] { s =>
     if (s.contains(".")) unsafeCoerce(s)(_.toDouble)
-    else failure(new Throwable(s"Cannot read double value of '$s'"))
+    else failure(s"Cannot read double value of '$s'")
   }
   implicit val readFloat: Read[Float] = Read[Float] { s =>
     if (s.toLowerCase.endsWith("f")) unsafeCoerce(s)(_.toFloat)
-    else failure(new Throwable(s"Cannot read float value of '$s'"))
+    else failure(s"Cannot read float value of '$s'")
   }
 
   // I should probably add some syntactic characteristics to BigInts in order to avoid ambiguity
   implicit val readBigInt: Read[BigInt] = Read[BigInt](unsafeCoerce(_)(x => BigInt(x)))
   implicit val readBigDecimal: Read[BigDecimal] = Read[BigDecimal] { s =>
     if(s.toLowerCase.endsWith("d")) unsafeCoerce(s.dropRight(1))(x => BigDecimal(x.toString))
-    else failure(new Throwable(s"Cannot read big decimal value of '$s'"))
+    else failure(s"Cannot read big decimal value of '$s'")
   }
 
   implicit val readFile: Read[File] = Read[File](unsafeCoerce(_)(x => new File(x)))
@@ -48,7 +50,7 @@ object Implicits {
         entry.split("=").toList match {
           case key :: value :: Nil =>
             (vm |@| proofK(key) |@| proofV(value)) ((m, k, v) => m + (k -> v))
-          case _ => failure(new Throwable(s"Cannot read map entry of `$entry`"))
+          case _ => failure(s"Cannot read map entry of `$entry`")
         }
       }
   }

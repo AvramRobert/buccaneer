@@ -18,6 +18,7 @@ object Read {
   }
   def success[A](a: A): Result[A] = a.successNel[Throwable]
   def failure[A](t: Throwable): Result[A] = t.failureNel[A]
+  def failure[A](message: String): Result[A] = failure(new Throwable(message))
   def unsafeCoerce[A](s: String)(f: String => A): Result[A] =
     try { success(f(s)) } catch { case NonFatal(t) => failure(t) }
 }

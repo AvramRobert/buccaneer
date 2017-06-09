@@ -56,19 +56,32 @@ sealed trait Step[+A] {
     case Meta(info) => meta(info)
   }
 
-  /** Prints the results of an interpretation
-    * It uses a pre-defined formatting for errors
-    * and prints them accordingly
+  /** Prints the results of an interpretation.
+    * It uses a pre-defined formatting for errors.
+    *
     */
-  def print: Unit = fold(println) {
-    errors =>
-      (Formatter(s"Command failed (${errors.size} errors):") ::
-        errors.
-          zipWithIndex.
-          map(t => Formatter(s"${t._2 + 1}. ${t._1.toString}").push(2))).
-        map(_.runMake).
-        foreach(println)
-  }(println)
+  def print: Unit = fold(println)(errs => formatErrors(errs) foreach println)(println)
+
+  /** Applies a side-effecting function on the success value of an
+    * iterpretation. Automatically prints errors and
+    * meta information with a predefined format.
+    *
+    * @param f side-effecting function
+    */
+  def foreach(f: A => Unit): Unit = fold(f)(errs => formatErrors(errs) foreach println)(println)
+
+  /** Minimalistic formatting for errors.
+    *
+    * @param errors the errors to be formatted
+    * @return a list of formatted strings
+    */
+  def formatErrors(errors: List[Throwable]): List[String] = {
+    (Formatter(s"Command failed (${errors.size} errors):") ::
+      errors.
+        zipWithIndex.
+        map(t => Formatter(s"${t._2 + 1}. ${t._1.toString}").push(2))).
+      map(_.runMake)
+  }
 }
 
 /** Represents the outcome of a transformation step of the interpreter.
@@ -99,7 +112,8 @@ object Interpreter {
     * @return set of command shapes that partially match the input
     */
   def partialMatch(commands: Set[Shape], input: List[String]): Set[Shape] =
-    commands.filter {
+    if (input.isEmpty) commands
+    else commands.filter {
       _.zipWithList(input).
         toVector.
         forall {
@@ -152,7 +166,7 @@ object Interpreter {
     * @tparam A type of the command result
     * @return an interpretation step
     */
-  def interpretH[A](cli: Cli[A], manConfig: ManConfig = ManConfig(150, 5, 5)) =
+  def interpretH[A](cli: Cli[A], manConfig: ManConfig = ManConfig()) =
     meta(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
 
   /** Picks-out the appropriate command a set of command shapes when
@@ -182,7 +196,7 @@ object Interpreter {
     def show(f: (List[String], Set[Shape]) => Section[String]): Step[Nothing] = {
       lazy val command = input.dropRight(1)
       partialMatch(cli.keySet, command) match {
-        case set if set.isEmpty => Transform(failure(new Throwable("No command found matching input")))
+        case set if set.isEmpty => Transform(failure("No command found matching input"))
         case set => Meta(f(command, set).run(manConfig))
       }
     }
@@ -241,8 +255,8 @@ object Interpreter {
   def pick = transform { (commands: List[AST]) =>
     commands match {
       case h :: Nil => success(h)
-      case Nil => failure(new Throwable("No command found matching input"))
-      case _ => failure(new Throwable(s"Ambiguous input. ${commands.size} match given input"))
+      case Nil => failure("No command found matching input")
+      case _ => failure(s"Ambiguous input. ${commands.size} match given input")
     }
   }
 
@@ -255,7 +269,7 @@ object Interpreter {
     */
   def runFrom[A](cli: Cli[A]) = phase { (command: AST) =>
     val key = command map (_._1)
-    val fail = Transform(failure(new Throwable("Unknown command")))
+    val fail = Transform(failure("Unknown command"))
 
     cli.get(key).fold[Step[A]](fail)(cmd => run(cmd).run(command))
   }
@@ -284,7 +298,7 @@ object Validators {
     case (TypedIdentifier(symbol, _, _), input) => symbol.find(v => input startsWith v)
     case _ => Some(Label(""))
   }).fold {
-    failure[(Denot, String)](new Throwable(s"Input of `${assoc._2}` does not match the expected input of ${assoc._1.show}"))
+    failure[(Denot, String)](s"Input of `${assoc._2}` does not match the expected input of ${assoc._1.show}")
   } { _ => success(assoc) }
 
   /** Function for validation the type of an input against its expectation.

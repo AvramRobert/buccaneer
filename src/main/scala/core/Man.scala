@@ -8,21 +8,34 @@ import scalaz.Reader
 trait ManOps {
   /** Convenience factory function for creating a `ManConfig` record.
     *
+    * @param programName command line application name
+    * @param programDescription a description of the application
     * @param textWidth desired text width per block of text
     * @param indentation desired indentation per line
     * @param columnSpacing desired spacing between columns of text
-    * @return
+    * @return a ManConfig case class
     */
-  def manConfig(textWidth: Int, indentation: Int, columnSpacing: Int): ManConfig = ManConfig(textWidth, indentation, columnSpacing)
+  def manConfig(programName: String = "nameless",
+                programDescription: String = "descriptionless",
+                textWidth: Int = 150,
+                indentation: Int = 5,
+                columnSpacing: Int = 5): ManConfig =
+    ManConfig(programName, programDescription, textWidth, indentation, columnSpacing)
 }
 
 /** A record containing various parameters for configuring the aesthetic of a MAN page.
   *
+  * @param programName command line application name
+  * @param programDescription a description of the application
   * @param textWidth desired text width per block of text
   * @param indentation desired indentation per line
   * @param columnSpacing desired spacing between columns of text
   */
-case class ManConfig(textWidth: Int, indentation: Int, columnSpacing: Int)
+case class ManConfig(programName: String = "nameless",
+                     programDescription: String = "descriptionless",
+                     textWidth: Int = 150,
+                     indentation: Int = 5,
+                     columnSpacing: Int = 5)
 
 object Man {
 
@@ -107,18 +120,16 @@ object Man {
     * @param tree command shape to extract infromation from
     * @return section of text that will create the formatted block of text when given a `ManConfig`
     */
-  def command(tree: Tree[Denot]): Section[Formatter] = tree.
-    takeWhile(_.isMajorIdentifier).
-    toVector match {
-    case name if name.isEmpty => emptySection
-    case name => Reader { help =>
-      text(name.
-        map(_.show).
-        mkString(" ") ++ s" - ${name.last.docs.msg}").
-        ofWidth(help.textWidth).
-        push(help.indentation).
-        every
-    }
+  def command(tree: Tree[Denot]): Section[Formatter] = Reader { config =>
+    tree.
+      takeWhile(_.isMajorIdentifier).
+      toVector.
+      lastOption.
+      map(denot => text(s"${denot.show} - ${denot.docs.msg}")).
+      getOrElse(text(s"${config.programName} - ${config.programDescription}")).
+      ofWidth(config.textWidth).
+      push(config.indentation).
+      every
   }
 
   /** Creates the usage section of a MAN page.
@@ -188,7 +199,7 @@ object Man {
     */
   def makeText(f: Formatter): String = makeText(List(f))
 
-  /** `getOrElse`-like function for empty collections of formatting.
+  /** `getOrElse`-like function for empty collections of formatters.
     *  Lifts `txt` into a formatter when `v` is empty and returns that.
     *  Otherwise returns `v`.
     *

@@ -127,7 +127,7 @@ implicit val readFraction = read[Fraction] { (input: String) =>
     val split = input.split("/")
     success(Fraction(split(0).toInt, split(1).toInt))
   } else {
-    failure(new Throwable(s"Input of $input is not a fraction"))
+    failure(s"Input of $input is not a fraction")
   }
 }
 ```
@@ -152,7 +152,7 @@ implicit val readFraction = read[Fraction] { (input: String) =>
       (num, denom) => Fraction(num, denom)
     }
   } else {
-    failure(new Throwable("Input is not a fraction."))
+    failure("Input is not a fraction.")
   }
 }
 ```
