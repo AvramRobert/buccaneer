@@ -16,9 +16,9 @@ I may perhaps not really need `Tree`. Everything implemented so far is actually 
 
 =====================
 TODO:
-0. HelpConfig should contain the name of the program and use it when no title is found. Also add it to usage.
+ > 0. HelpConfig should contain the name of the program and use it when no title is found. Also add it to usage.
 1. Add the `--help` and `--sgst` options to the MAN page
-2. Reduce the usages displayed.
+2. Revise usages. It outputs too much.
 3. Add show to Read[A].
 4. Add publishing configuration to this project and publish to Maven/Bintray
 5. Create a new project for the sbt plugin and import add buccaneer
@@ -33,23 +33,6 @@ Future features:
 4. Variable arguments of one particular type (or for example variable arguments of key-value pairs)
 5. Dependent argument. Check the value of one argument against the value of the previous argument
 6. Interactive mode, backed by the Cli itself
-
-Improvements:
-
-1. Compound denotations:
-   Example:
-     val int = argument[Int]
-     val min = option("-m") with int
-     ...
-     (.. - min - ..) { (.., int, ..) => }
-
-2. Implicit conversion for tuples of denotations => applier of functions
-   implicit class Denot2[A, B](x: (Denot[A], Denot[B])) {
-      def apply[C](f: (A, B) => C): C
-    }
-    ...
-    (min, max) { (min, max) => ... }
-    => play around with this idea
 
 Formatter:
     Idea: Define a formatter in terms of what can be done at each line.

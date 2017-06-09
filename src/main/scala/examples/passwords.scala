@@ -9,6 +9,7 @@ import scala.collection.immutable.Stream.continually
 
 object passwords {
 
+  val config = manConfig(programName = "passwords", programDescription = "Dummy password generator")
   val empty = argument[Unit]
   val seed = assignment[Long]("seed=").msg("A seed, that the user can explicitly specify")
   val min = assignment[Int]("min=", (i: Int) => i >= 5).msg("Minimal password length. Values lower than 5 are not accepted")
@@ -73,7 +74,7 @@ object passwords {
   }
 
   def main(args: Array[String]): Unit =
-    interpretH(apg).
+    interpretH(apg, config).
       run(args.toList).
       foreach(_ foreach println)
 
