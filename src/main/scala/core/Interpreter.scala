@@ -44,8 +44,8 @@ sealed trait Step[+A] {
   /** Folds over the possible cases of an interpretation
     *
     * @param success function for the success case
-    * @param fail function for the failure case
-    * @param meta function for the meta case
+    * @param fail    function for the failure case
+    * @param meta    function for the meta case
     * @tparam B type of resulting structure
     * @return some value
     */
@@ -108,7 +108,7 @@ object Interpreter {
     * keeps those that match most closely. The matching occurs from left-to-right.
     *
     * @param commands shapes of commands to match against
-    * @param input input of command elements
+    * @param input    input of command elements
     * @return set of command shapes that partially match the input
     */
   def partialMatch(commands: Set[Shape], input: List[String]): Set[Shape] =
@@ -160,13 +160,13 @@ object Interpreter {
     *
     * For man pages, any command should end in `-help` or `--help`.
     * For suggestions, any command should end in `-sgst` or `--sgst`.
-
-    * @param cli the command line interface
+    *
+    * @param cli       the command line interface
     * @param manConfig the configuration record for MAN pages
     * @tparam A type of the command result
     * @return an interpretation step
     */
-  def interpretH[A](cli: Cli[A], manConfig: ManConfig = ManConfig()) =
+  def interpretH[A](cli: Cli[A], manConfig: ManConfig = ManConfig.man()) =
     meta(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
 
   /** Picks-out the appropriate command a set of command shapes when
@@ -187,7 +187,7 @@ object Interpreter {
 
   /** Provides MAN page generation and suggestions for a command line interface.
     *
-    * @param cli the command line interface
+    * @param cli       the command line interface
     * @param manConfig the configuration record for MAN pages
     * @tparam A type of the command result
     * @return an interpretation step
@@ -201,9 +201,10 @@ object Interpreter {
       }
     }
 
-    input.last match {
-      case "-help" | "--help" => show(Man.help)
-      case "-sgst" | "--sgst" => show(Man.suggest)
+    (manConfig.help.symbol.find(_ == input.last),
+      manConfig.suggest.symbol.find(_ == input.last)) match {
+      case (Some(_), _) => show(Man.help)
+      case (_, Some(_)) => show(Man.suggest)
       case _ => Transform(success(input))
     }
   }

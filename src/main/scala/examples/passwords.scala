@@ -4,25 +4,38 @@ import core.DSL._
 import core.Cli
 import core.Interpreter._
 import core.Implicits._
-import scala.util.Random.{shuffle, nextInt, nextLong, setSeed}
+import scala.util.Random.{nextInt, nextLong, setSeed, shuffle}
 import scala.collection.immutable.Stream.continually
 
 object passwords {
 
-  val config = manConfig(programName = "passwords", programDescription = "Dummy password generator")
-  val empty = argument[Unit]
+
+  val help = option("-h" | "--help").msg("Prints this page")
+  val suggest = option("-s" | "--suggest").msg("Prints a suggestion list")
+  val empty = argument[Unit].msg("No parameters. Runs the command with default params.")
   val seed = assignment[Long]("seed=").msg("A seed, that the user can explicitly specify")
   val min = assignment[Int]("min=", (i: Int) => i >= 5).msg("Minimal password length. Values lower than 5 are not accepted")
   val max = assignment[Int]("max=", (i: Int) => i >= 5).msg("Maximal password length. Values lower than 5 are not accepted")
   val exclusion = assignment[String]("exclude=").msg("String of characters that should be excluded from the creation process")
   val version = option("-v" | "--version").msg("Outputs the current version")
 
+  val config = manpage(
+    programName = "passwords",
+    programDescription = "Dummy password generator",
+    help = help,
+    suggest = suggest)
+
   lazy val dictionary: Vector[Char] = (33 to 127).map(_.toChar).toVector
 
   def exclude(exclusion: String): Vector[Char] = dictionary diff exclusion
 
-  def pick(p: Int => Boolean): Int = {
-    val options = (5 to 20).filter(p)
+  def pickMin(max: Int): Int = {
+    val options = (0 to max).filter(_ < max)
+    options(nextInt(options.size))
+  }
+
+  def pickMax(min: Int): Int = {
+    val options = (min to (min + 10)).filter(_ > min)
     options(nextInt(options.size))
   }
 
@@ -31,17 +44,17 @@ object passwords {
     empty { _ => generate() },
     exclusion { ex => generate(dictionary = exclude(ex)) },
     seed { seed => generate(seed = seed) },
-    max { max => generate(maxLength = max) },
-    min { min => generate(minLength = min) },
+    max { max => generate(minLength = pickMin(max), maxLength = max) },
+    min { min => generate(minLength = min, maxLength = pickMax(min)) },
     (min - max) { (min, max) => generate(minLength = min, maxLength = max) },
-    (max - seed) { (max, seed) => generate(maxLength = max, seed = seed) },
-    (min - seed) { (min, seed) => generate(minLength = min, seed = seed) },
-    (seed - min) { (seed, min) => generate(minLength = min, seed = seed) },
-    (seed - max) { (seed, max) => generate(maxLength = max, seed = seed) },
-    (exclusion - min) { (ex, min) => generate(minLength = min, dictionary = exclude(ex)) },
-    (exclusion - max) { (ex, max) => generate(maxLength = max, dictionary = exclude(ex)) },
-    (max - exclusion) { (max, ex) => generate(maxLength = max, dictionary = exclude(ex)) },
-    (min - exclusion) { (min, ex) => generate(minLength = min, dictionary = exclude(ex)) },
+    (max - seed) { (max, seed) => generate(minLength = pickMin(max), maxLength = max, seed = seed) },
+    (min - seed) { (min, seed) => generate(minLength = min, maxLength = pickMax(min), seed = seed) },
+    (seed - min) { (seed, min) => generate(minLength = min, maxLength = pickMax(min), seed = seed) },
+    (seed - max) { (seed, max) => generate(minLength = pickMin(max), maxLength = max, seed = seed) },
+    (exclusion - min) { (ex, min) => generate(minLength = min, maxLength = pickMax(min), dictionary = exclude(ex)) },
+    (exclusion - max) { (ex, max) => generate(minLength = pickMin(max), maxLength = max, dictionary = exclude(ex)) },
+    (max - exclusion) { (max, ex) => generate(minLength = pickMin(max), maxLength = max, dictionary = exclude(ex)) },
+    (min - exclusion) { (min, ex) => generate(minLength = min, maxLength = pickMax(min), dictionary = exclude(ex)) },
     (min - max - seed) { (min, max, seed) => generate(minLength = min, maxLength = max, seed = seed) },
     (seed - min - max) { (seed, min, max) => generate(minLength = min, maxLength = max, seed = seed) },
     (min - max - exclusion) { (min, max, ex) => generate(minLength = min, maxLength = max, dictionary = exclude(ex)) },

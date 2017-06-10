@@ -4,38 +4,67 @@ import Formatter.Formatter
 import scalaz.syntax.traverse._
 import scala.annotation.tailrec
 import scalaz.Reader
+import ManConfig._
 
 trait ManOps {
-  /** Convenience factory function for creating a `ManConfig` record.
+
+  /** Convenience DSL function for creating creating ManConfig
     *
     * @param programName        command line application name
     * @param programDescription a description of the application
+    * @param help               the identifier to call when printing the help MAN page
+    * @param suggest            the identifier to call when printing the list of input suggestions
     * @param textWidth          desired text width per block of text
     * @param indentation        desired indentation per line
     * @param columnSpacing      desired spacing between columns of text
-    * @return a ManConfig case class
+    * @return a `ManConfig` case class containing all the provided values
     */
-  def manConfig(programName: String = "nameless",
-                programDescription: String = "descriptionless",
-                textWidth: Int = 150,
-                indentation: Int = 5,
-                columnSpacing: Int = 5): ManConfig =
-    ManConfig(programName, programDescription, textWidth, indentation, columnSpacing)
+  def manpage(programName: String = "nameless",
+          programDescription: String = "descriptionless",
+          help: Identifier = help,
+          suggest: Identifier = suggest,
+          textWidth: Int = 150,
+          indentation: Int = 5,
+          columnSpacing: Int = 5): ManConfig = man(programName, programDescription, help, suggest, textWidth, indentation, columnSpacing)
+}
+
+
+object ManConfig {
+  lazy val helpSym = Label("-help") | Label("--help")
+  lazy val helpDesc = "Prints this page"
+  lazy val suggestSym = Label("-sgst") | Label("--sgst")
+  lazy val suggestDesc = "Prints a list of input suggestions based on the current input"
+
+  lazy val help = Denot.id(helpSym).msg(helpDesc)
+  lazy val suggest = Denot.id(suggestSym).msg(suggestDesc)
+
+  def man(programName: String = "nameless",
+          programDescription: String = "descriptionless",
+          help: Identifier = help,
+          suggest: Identifier = suggest,
+          textWidth: Int = 150,
+          indentation: Int = 5,
+          columnSpacing: Int = 5): ManConfig =
+    ManConfig(programName, programDescription, help, suggest, textWidth, indentation, columnSpacing)
 }
 
 /** A record containing various parameters for configuring the aesthetic of a MAN page.
   *
   * @param programName        command line application name
   * @param programDescription a description of the application
+  * @param help               the identifier to call when printing the help MAN page
+  * @param suggest            the identifier to call when printing the list of input suggestions
   * @param textWidth          desired text width per block of text
   * @param indentation        desired indentation per line
   * @param columnSpacing      desired spacing between columns of text
   */
-case class ManConfig(programName: String = "nameless",
-                     programDescription: String = "descriptionless",
-                     textWidth: Int = 150,
-                     indentation: Int = 5,
-                     columnSpacing: Int = 5)
+case class ManConfig(programName: String,
+                     programDescription: String,
+                     help: Identifier,
+                     suggest: Identifier,
+                     textWidth: Int,
+                     indentation: Int,
+                     columnSpacing: Int)
 
 object Man {
 
@@ -141,7 +170,9 @@ object Man {
     * @return a section containing a compacted usage block in text form
     */
   def usages(command: Tree[Denot], options: Vector[Tree[Denot]]): Section[Vector[Formatter]] = section { config =>
-    options.
+    val internal = Vector(Tree(config.help), Tree(config.suggest))
+
+    (options ++ internal).
       filterNot(_.rootOf(_.isMajorIdentifier)).
       flatMap(_.toVector).
       map(_.show).
@@ -181,14 +212,16 @@ object Man {
     * @param all command shapes
     * @return a section containing a vector of all options in text form
     */
-  def options(all: Vector[Tree[Denot]]): Section[Vector[Formatter]] = {
+  def options(all: Vector[Tree[Denot]]): Section[Vector[Formatter]] = section { config =>
     val max = largest(all)
-    all.filterNot(_.rootOf(_.isMajorIdentifier)).
+    val internal = Vector(Tree(config.help), Tree(config.suggest))
+    (all ++ internal).
+      filterNot(_.rootOf(_.isMajorIdentifier)).
       flatMap(paired).
       distinct.
       map(t => columned(t._1, t._2, max)).
       sequenceU
-  }
+  }.flatMap(identity)
 
   /** Creates a complete text from a collection of formatters.
     *
@@ -227,6 +260,7 @@ object Man {
     * @return section of text that returns the MAN page when given a `ManConfig`
     */
   def help(input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = for {
+    suggestion <- section(_.suggest)
     matched <- section(_ => corresponding.toVector.map(_ zips input))
     first = matched.map(_.takeWhile(_._2.isDefined).map(_._1))
     rest = matched.map(_.dropWhile(_._2.isDefined).map(_._1))
@@ -248,7 +282,7 @@ object Man {
         text("SUB-COMMANDS") +:
         whenEmpty(subcommandSection)("There are no sub-commands available.") :+
         linebreak :+
-        text("Hint: You can invoke `-sgst` or `--sgst` at any point to receive a list of all possible commands that match your current input."))
+        text(s"Hint: You can invoke ${suggestion.show} at any point to receive a list of all possible commands that match your current input."))
   }
 
   /** Creates suggestions relative to some concrete command line input
