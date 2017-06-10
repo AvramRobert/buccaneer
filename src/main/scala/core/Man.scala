@@ -8,11 +8,11 @@ import scalaz.Reader
 trait ManOps {
   /** Convenience factory function for creating a `ManConfig` record.
     *
-    * @param programName command line application name
+    * @param programName        command line application name
     * @param programDescription a description of the application
-    * @param textWidth desired text width per block of text
-    * @param indentation desired indentation per line
-    * @param columnSpacing desired spacing between columns of text
+    * @param textWidth          desired text width per block of text
+    * @param indentation        desired indentation per line
+    * @param columnSpacing      desired spacing between columns of text
     * @return a ManConfig case class
     */
   def manConfig(programName: String = "nameless",
@@ -25,11 +25,11 @@ trait ManOps {
 
 /** A record containing various parameters for configuring the aesthetic of a MAN page.
   *
-  * @param programName command line application name
+  * @param programName        command line application name
   * @param programDescription a description of the application
-  * @param textWidth desired text width per block of text
-  * @param indentation desired indentation per line
-  * @param columnSpacing desired spacing between columns of text
+  * @param textWidth          desired text width per block of text
+  * @param indentation        desired indentation per line
+  * @param columnSpacing      desired spacing between columns of text
   */
 case class ManConfig(programName: String = "nameless",
                      programDescription: String = "descriptionless",
@@ -40,6 +40,8 @@ case class ManConfig(programName: String = "nameless",
 object Man {
 
   type Section[A] = Reader[ManConfig, A]
+
+  lazy val missing = Vector.empty[Formatter]
 
   def section[A](f: ManConfig => A): Section[A] = Reader(f)
 
@@ -59,7 +61,7 @@ object Man {
 
   /** Creates an indented and padded block of text given a `ManConfig`
     *
-    * @param txt block of text
+    * @param txt   block of text
     * @param fsize size adjustment
     * @return a section of text that formats the block when given a `ManConfig`
     */
@@ -75,8 +77,8 @@ object Man {
     * The size of the largest text block is also passed in case that block
     * is not one of the two in the argument list. (maintains size consistency)
     *
-    * @param left text block on the left
-    * @param right text block on the right
+    * @param left    text block on the left
+    * @param right   text block on the right
     * @param largest size of the largest text block (if there are any
     * @return a section of text that formats the block when given a `ManConfig`
     */
@@ -120,7 +122,7 @@ object Man {
     * @param tree command shape to extract infromation from
     * @return section of text that will create the formatted block of text when given a `ManConfig`
     */
-  def command(tree: Tree[Denot]): Section[Formatter] = Reader { config =>
+  def command(tree: Tree[Denot]): Section[Formatter] = section { config =>
     tree.
       takeWhile(_.isMajorIdentifier).
       toVector.
@@ -134,23 +136,28 @@ object Man {
 
   /** Creates the usage section of a MAN page.
     *
-    * @param all command shapes
-    * @return a section containing a vector of examples for usage in text form
+    * @param command current command
+    * @param options the options of the current command
+    * @return a section containing a compacted usage block in text form
     */
-  def usage(all: Vector[Tree[Denot]]): Section[Vector[Formatter]] = section { config =>
-    val com = all.headOption.fold("")(_.takeWhile(_.isMajorIdentifier).string(" ")(_.show))
-
-    Stream.continually(text(com)).
-      take(all.size).
-      zip(all.map { a => text(a.dropWhile(_.isMajorIdentifier).string(" ")(_.show)) }).
-      map {
-        case (left, right) =>
-          (left concat right).
-            coeval.
-            push(config.indentation - 1).
-            ofWidth(config.textWidth)
+  def usages(command: Tree[Denot], options: Vector[Tree[Denot]]): Section[Vector[Formatter]] = section { config =>
+    options.
+      filterNot(_.rootOf(_.isMajorIdentifier)).
+      flatMap(_.toVector).
+      map(_.show).
+      distinct.
+      map(str => s"[$str]").
+      grouped(3).
+      map(v => text(v.mkString(" ")).widen(_ + 1)).
+      reduceOption(_ interlace _).
+      map { usages =>
+        text(s"${config.programName} ${command.toVector.map(_.show).mkString(" ")}").
+          push(config.indentation).
+          widen(_ + config.indentation).
+          align(usages, 1)
       }.
-      toVector
+      map(Vector(_)).
+      getOrElse(missing)
   }
 
   /** Creates the subcommand section of a MAN page.
@@ -176,7 +183,7 @@ object Man {
     */
   def options(all: Vector[Tree[Denot]]): Section[Vector[Formatter]] = {
     val max = largest(all)
-    all.filter(_.rootOf(denot => !denot.isMajorIdentifier)).
+    all.filterNot(_.rootOf(_.isMajorIdentifier)).
       flatMap(paired).
       distinct.
       map(t => columned(t._1, t._2, max)).
@@ -200,10 +207,10 @@ object Man {
   def makeText(f: Formatter): String = makeText(List(f))
 
   /** `getOrElse`-like function for empty collections of formatters.
-    *  Lifts `txt` into a formatter when `v` is empty and returns that.
-    *  Otherwise returns `v`.
+    * Lifts `txt` into a formatter when `v` is empty and returns that.
+    * Otherwise returns `v`.
     *
-    * @param v possibly empty vector of formatters
+    * @param v   possibly empty vector of formatters
     * @param txt alternative if `v` is empty
     * @return vector of formatters
     */
@@ -215,17 +222,16 @@ object Man {
   /** Creates a complete MAN page relative to some concrete command
     * line input and the command shapes that match that input.
     *
-    * @param input input from command line
+    * @param input         input from command line
     * @param corresponding shapes of commands corresponding to input
     * @return section of text that returns the MAN page when given a `ManConfig`
     */
   def help(input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = for {
-    matched <- section(_ => corresponding.toVector)
-    zipped = matched.map(_ zips input)
-    first = zipped.map(_.takeWhile(_._2.isDefined).map(_._1))
-    rest = zipped.map(_.dropWhile(_._2.isDefined).map(_._1))
+    matched <- section(_ => corresponding.toVector.map(_ zips input))
+    first = matched.map(_.takeWhile(_._2.isDefined).map(_._1))
+    rest = matched.map(_.dropWhile(_._2.isDefined).map(_._1))
     commandSection <- first.headOption.fold(emptySection)(command)
-    usageSection <- usage(matched)
+    usagesSection <- first.headOption.fold(emptySection.map(_ => missing))(usages(_, rest))
     optionsSection <- options(rest)
     subcommandSection <- subcommands(rest)
     linebreak = Formatter.empty
@@ -234,13 +240,13 @@ object Man {
       commandSection +:
       linebreak +:
       text("USAGE") +:
-      whenEmpty(usageSection)("No usage information available.")) ++
+      whenEmpty(usagesSection)("There are no usages available.")) ++
       (linebreak +:
-        text("OPTIONS") +:
-        whenEmpty(optionsSection)("There are no options available.")) ++
+      text("OPTIONS") +:
+      whenEmpty(optionsSection)("There are no options available.")) ++
       (linebreak +:
-        text("COMMANDS") +:
-        whenEmpty(subcommandSection)("There are no commands available.") :+
+        text("SUB-COMMANDS") +:
+        whenEmpty(subcommandSection)("There are no sub-commands available.") :+
         linebreak :+
         text("Hint: You can invoke `-sgst` or `--sgst` at any point to receive a list of all possible commands that match your current input."))
   }
@@ -248,7 +254,7 @@ object Man {
   /** Creates suggestions relative to some concrete command line input
     * and the shape of commands corresponding to that input.
     *
-    * @param input input from command line
+    * @param input         input from command line
     * @param corresponding shape of commands corresponding to input
     * @return a section of text that returns the box of suggestions given a `ManConfig`
     */
@@ -264,6 +270,7 @@ object Man {
     }
   }
 }
+
 object Formatter {
 
   private[core]
@@ -278,6 +285,7 @@ object Formatter {
   type Format[A] = Vector[A] => Vector[A]
 
   def apply(data: Vector[Char]): Formatter = More(data, identity, data.size, 0, Few(1))
+
   def apply(text: String): Formatter = apply(text.toCharArray.toVector)
 
   def empty: Formatter = Formatter(Vector(' '))
@@ -327,6 +335,7 @@ object Formatter {
     }
 
     /** Transforms one formatting function into another
+      *
       * @param f morphism for the formatting
       * @return a new formatter containing the new formattign function
       */
@@ -481,7 +490,23 @@ object Formatter {
           zip(that.evaluate.grouped(that.width))
           .flatMap(v => v._1 ++ v._2)
           .toVector)
-        .widen(_ => width + that.width)
+        .ofWidth(width + that.width)
+    }
+
+    /** Attaches `that` to `this` with a new line and makes
+      * sure that the overall width is kept.
+      *
+      * @param that formatter to interlace
+      * @return `that` formatter placed at the bottom of `this` formatter
+      */
+
+    def interlace(that: Formatter): Formatter = {
+      val larger = Math.max(width, that.width)
+
+      ofWidth(larger).
+        fill.
+        concat(that.ofWidth(larger).fill).
+        ofWidth(larger)
     }
 
     //TODO: Vector() should be the identity in this thing! fill(0) for example actually fills the bloody thing with one value (' ')
@@ -495,7 +520,7 @@ object Formatter {
     def equate(that: Formatter): (Formatter, Formatter) = {
       def pad(larger: Formatter, smaller: Formatter) = {
         val diff = larger.totalLines - smaller.totalLines
-        if(diff == 0) (larger.fill, smaller.fill)
+        if (diff == 0) (larger.fill, smaller.fill)
         else (larger.fill, smaller.fill.fill(diff * smaller.width))
       }
 
@@ -508,7 +533,7 @@ object Formatter {
       * places the texts of these formatters in columns and
       * aligns them next to each other relative to the given `distance`
       *
-      * @param that formatter to align with
+      * @param that     formatter to align with
       * @param distance distance between both columns
       * @return a new formatter containing and formatting two columned texts
       */
@@ -592,8 +617,8 @@ object Formatter {
 
   /** Indicates a formatting that needs to happen at every line in some text.
     *
-    * @param data text to format
-    * @param f the formatting that should occur at every line
+    * @param data  text to format
+    * @param f     the formatting that should occur at every line
     * @param width the width of each line for the given `data`
     */
   private[core]
@@ -601,11 +626,11 @@ object Formatter {
 
   /** Indicates a formatting that needs to happen at specific lines in some text.
     *
-    * @param data text to format
-    * @param f the formatting that should occur only at specific lines
+    * @param data  text to format
+    * @param f     the formatting that should occur only at specific lines
     * @param width the width f each line for the given `data`
-    * @param at line at which formatting should start
-    * @param n amount of lines for which formatting should be applied
+    * @param at    line at which formatting should start
+    * @param n     amount of lines for which formatting should be applied
     */
   private[core]
   case class More(data: Vector[Char], f: Format[Char], width: Int, at: Int, n: Cardinality) extends Formatter

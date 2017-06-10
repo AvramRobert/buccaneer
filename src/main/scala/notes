@@ -18,7 +18,7 @@ I may perhaps not really need `Tree`. Everything implemented so far is actually 
 TODO:
  > 0. HelpConfig should contain the name of the program and use it when no title is found. Also add it to usage.
 1. Add the `--help` and `--sgst` options to the MAN page
-2. Revise usages. It outputs too much.
+ > 2. Revise usages. It outputs too much.
 3. Add show to Read[A].
 4. Add publishing configuration to this project and publish to Maven/Bintray
 5. Create a new project for the sbt plugin and import add buccaneer
