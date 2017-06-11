@@ -10,14 +10,14 @@ import scala.collection.immutable.Stream.continually
 object passwords {
 
 
-  val help = option("-h" | "--help").msg("Prints this page")
-  val suggest = option("-s" | "--suggest").msg("Prints a suggestion list")
+  val help = option("-h", "--help").msg("Prints this page")
+  val suggest = option("-s", "--suggest").msg("Prints a suggestion list")
   val empty = argument[Unit].msg("No parameters. Runs the command with default params.")
   val seed = assignment[Long]("seed=").msg("A seed, that the user can explicitly specify")
-  val min = assignment[Int]("min=", (i: Int) => i >= 5).msg("Minimal password length. Values lower than 5 are not accepted")
-  val max = assignment[Int]("max=", (i: Int) => i >= 5).msg("Maximal password length. Values lower than 5 are not accepted")
+  val min = assignment[Int]((i: Int) => i >= 5)("min=", "m=").msg("Minimal password length. Values lower than 5 are not accepted")
+  val max = assignment[Int]((i: Int) => i >= 5)("max=", "x=").msg("Maximal password length. Values lower than 5 are not accepted")
   val exclusion = assignment[String]("exclude=").msg("String of characters that should be excluded from the creation process")
-  val version = option("-v" | "--version").msg("Outputs the current version")
+  val version = option("-v", "--version").msg("Outputs the current version")
 
   val config = manpage(
     programName = "passwords",

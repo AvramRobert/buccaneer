@@ -4,16 +4,16 @@ package core
   */
 sealed trait Sym {
 
-  def | (that: String): Alternative = this | Label(that)
-
-  def | (label: Label): Alternative = this match {
-    case x @ Label(_) => Alternative(Vector(x, label))
-    case Alternative(alt) => Alternative(alt :+ label)
+  def | (that: String): Alternative = this match {
+    case Label(v) => Alternative(Seq(v, that))
+    case Alternative(alts) => Alternative(alts :+ that)
   }
+
+  def | (label: Label): Alternative = this | label.value
 
   final def find(p: String => Boolean): Option[Label] = this match {
     case x@Label(value) if p(value) => Some(x)
-    case Alternative(alts) => alts.find(x => p(x.value))
+    case Alternative(alts) => alts.find(p).map(Label)
     case _ => None
   }
 
@@ -21,7 +21,7 @@ sealed trait Sym {
 
   def show: String = this match {
     case Label(v) => v
-    case Alternative(alts) => alts.map(_.value).mkString(" | ")
+    case Alternative(alts) => alts.mkString(" | ")
   }
 }
 
@@ -35,7 +35,7 @@ case class Label(value: String) extends Sym
   *
   * @param alts list of various unary symbols
   */
-case class Alternative(alts: Vector[Label]) extends Sym
+case class Alternative(alts: Seq[String]) extends Sym
 
 object Denot {
   def id(symbol: Sym, isMajor: Boolean = false, docs: String = ""): Identifier = Identifier(symbol, isMajor, docs)
@@ -63,9 +63,10 @@ sealed trait Denot {
   }
 
   def show: String = this match {
-    case Typing(_, _) => "<value>"
+    case Typing(proof, _) => s"<${proof.show}>"
     case Identifier(sym, _, _) => sym.show
-    case TypedIdentifier(sym, _, _) => s"${sym.show}<value>"
+    case TypedIdentifier(Label(v), proof, _) => s"$v<${proof.show}>"
+    case TypedIdentifier(Alternative(alts), proof, _) => Alternative(alts.map(v => s"$v<${proof.show}>")).show
   }
 }
 

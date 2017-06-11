@@ -1,6 +1,6 @@
 import core.DSL._
 import core.Implicits._
-import core.{Cli, Interpreter, Step, Validators, Denot}
+import core.{Cli, Interpreter, Step, Validators, Denot, Label}
 
 class InterpreterSpec extends DefaultTestSuite {
 
@@ -104,12 +104,12 @@ class InterpreterSpec extends DefaultTestSuite {
     "validate denotations" in {
       forAll { (id: String, value: Int) =>
         whenever(id.trim.nonEmpty) {
-          Validators.syntax((Denot.id(id), id)).isSuccess shouldBe true
-          Validators.syntax((Denot.typedId(id, readInt), s"$id$value")).isSuccess shouldBe true
+          Validators.syntax((Denot.id(Label(id)), id)).isSuccess shouldBe true
+          Validators.syntax((Denot.typedId(Label(id), readInt), s"$id$value")).isSuccess shouldBe true
           Validators.syntax((Denot.typing(readInt), value.toString)).isSuccess shouldBe true
           Validators.types((Denot.typing(readInt), value.toString)).isSuccess shouldBe true
-          Validators.syntax((Denot.typedId(id, readInt), s"noId$value")).isFailure shouldBe true
-          Validators.types((Denot.typedId(id, readBool), s"$id$value")).isFailure shouldBe true
+          Validators.syntax((Denot.typedId(Label(id), readInt), s"noId$value")).isFailure shouldBe true
+          Validators.types((Denot.typedId(Label(id), readBool), s"$id$value")).isFailure shouldBe true
         }
       }
     }

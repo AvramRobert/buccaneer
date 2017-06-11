@@ -9,11 +9,12 @@ import scalaz.syntax.validation._
 object Read {
   type Result[A] = ValidationNel[Throwable, A]
 
-  def apply[A](f: String => Result[A]): Read[A] = new Read[A] {
+  def apply[A](typeName: String)(f: String => Result[A]): Read[A] = new Read[A] {
     override def apply(a: String): Result[A] = f(a)
+    override def show = typeName
   }
-  def read[A](f: String => Result[A]): Read[A] = Read[A](f)
-  def readWhen[A](r: Read[A])(p: A => Boolean): Read[A] = Read[A] { a =>
+  def read[A](typeName: String)(f: String => Result[A]): Read[A] = Read[A](typeName)(f)
+  def readWhen[A](r: Read[A])(p: A => Boolean): Read[A] = Read[A](r.show){ a =>
     r(a).ensure(NonEmptyList(new Throwable("Unmet type constraint")))(p)
   }
   def success[A](a: A): Result[A] = a.successNel[Throwable]
@@ -29,4 +30,5 @@ object Read {
   */
 trait Read[A] {
   def apply(a: String): Result[A]
+  def show: String
 }

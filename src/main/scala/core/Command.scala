@@ -23,26 +23,25 @@ trait CommandOps {
     * Picks a `Read` instance from implicit scope and
     * transforms it into a constrained `Read`
     *
-    * @param p predicate constraint on future value
-    * @param read read instance to pick
+    * @param p predicate constraint on the future value
     * @tparam A type of `Read`
     * @return constrained `Read` instance
     */
-  def proofWhen[A](p: A => Boolean)(implicit read: Read[A]): Read[A] = readWhen(proof)(p)
+  def proofWhen[A: Read](p: A => Boolean): Read[A] = readWhen(proof)(p)
 
   /** Creates a command identifier.
     *
     * @param label command name as symbol
     * @return identifier denotation
     */
-  def command(label: Sym): Identifier = id(label, isMajor = true)
+  def command(label: String): Identifier = id(Label(label), isMajor = true)
 
   /** Creates an option identifier.
     *
-    * @param label option name as symbol
+    * @param labels a sequence of possible options
     * @return identifier denotation
     */
-  def option(label: Sym): Identifier = id(label)
+  def option(labels: String*): Identifier = id(Alternative(labels))
 
   /** Creates a type argument.
     *
@@ -62,21 +61,21 @@ trait CommandOps {
 
   /** Creates an association between an identifier and a type.
     *
-    * @param label identifier name as symbol
+    * @param labels a sequence of possible names for the assignment
     * @tparam A desired type
     * @return typed identifier denotation
     */
-  def assignment[A: Read](label: Sym): TypedIdentifier[A] = typedId(label, proof)
+  def assignment[A: Read](labels: String*): TypedIdentifier[A] = typedId(Alternative(labels), proof)
 
   /**
     * Creates a constrained association between an identifier and a type.
     *
-    * @param label identifier name as symbol
+    * @param labels a sequence of possible names for the assignment
     * @param p predicate constraint on future value
     * @tparam A desired type
     * @return typed identifier denotation
     */
-  def assignment[A: Read](label: Sym, p: A => Boolean): TypedIdentifier[A] = typedId(label, proofWhen(p))
+  def assignment[A: Read](p: A => Boolean)(labels: String*): TypedIdentifier[A] = typedId(Alternative(labels), proofWhen(p))
 }
 
 /** A builder DSL for commands, that concretely encodes function arity up to 12 types.
@@ -102,7 +101,7 @@ object CmdBld {
 
 private[core]
 sealed trait CmdBld[+A] {
-  protected def coerce[B](f: String => Result[B]): Typer[B] = coerce(Read(f))
+  protected def coerce[B](f: String => Result[B]): Typer[B] = coerce(Read("")(f))
 
   protected def coerce[B](proof: Read[B]): Typer[B] =
     for {
@@ -119,13 +118,14 @@ sealed trait CmdBld[+A] {
   protected def makeTyp[C[_] <: CmdBld[_], B](typing: Typing[B])(f: (Tree[Denot], Typer[B]) => C[B]): C[B] = f(Tree.apply(typing), coerce(typing.proof))
 
   protected def makeTId[C[_] <: CmdBld[_], B](tid: TypedIdentifier[B])(f: (Tree[Denot], Typer[B]) => C[B]): C[B] = {
-    val newProof = Read { s =>
+    val newProof = Read (tid.proof.show) { s =>
       tid.symbol
         .find(value => s startsWith value)
         .map(label => s drop label.value.length)
         .map(tid.proof.apply)
-        .getOrElse(failure(s"Could not prove that the value of ${tid.symbol.show} is of the desired type"))
+        .getOrElse(failure(s"Could not prove that the value of ${tid.symbol.show} is of type ${tid.proof.show}"))
     }
+
     f(Tree(tid.copy(proof = newProof)), coerce(newProof))
   }
 }
