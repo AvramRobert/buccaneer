@@ -117,8 +117,8 @@ object Interpreter {
       _.zipWithList(input).
         toVector.
         forall {
-          case (Identifier(sym, _, _), value) => sym.isSymbol(value)
-          case (TypedIdentifier(sym, _, _), value) => sym.find(a => value startsWith a).fold(false)(_ => true)
+          case (Identifier(sym, _, _), value) => sym.exists(_ == value)
+          case (TypedIdentifier(sym, _, _), value) => sym.exists(x => value startsWith x)
           case (Typing(p, _), value) => p(value).isSuccess
         }
     }

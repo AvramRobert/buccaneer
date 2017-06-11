@@ -27,9 +27,9 @@ class SymDenotSpec extends DefaultTestSuite {
     "support endomorphisms for their Docs" in {
       forAll { (id: String, text: String) =>
         val sym = Label(id)
-        Denot.id(sym).mapDocs(_.mapMsg(_ => text)).docs.msg == text
-        Denot.typing[Int](readInt).mapDocs(_.mapMsg(_ => text)).docs.msg == text
-        Denot.typedId[Int](sym, readInt).mapDocs(_.mapMsg(_ => text)).docs.msg == text
+        Denot.id(sym).msg(text).docs == text
+        Denot.typing[Int](readInt).msg(text).docs == text
+        Denot.typedId[Int](sym, readInt).msg(text).docs == text
       }
     }
   }

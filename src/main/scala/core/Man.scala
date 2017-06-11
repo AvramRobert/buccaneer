@@ -126,7 +126,7 @@ object Man {
     @tailrec def go(cur: Tree[Denot], acc: Vector[(String, String)] = Vector()): Vector[(String, String)] = cur match {
       case a -< (l, r) =>
         val left = l.foldLeft(a.show) { (str, denot) => s"$str ${denot.show}" }
-        go(r, acc :+ (left, a.docs.msg))
+        go(r, acc :+ (left, a.docs))
       case Leaf => acc
     }
 
@@ -156,7 +156,7 @@ object Man {
       takeWhile(_.isMajorIdentifier).
       toVector.
       lastOption.
-      map(denot => text(s"${denot.show} - ${denot.docs.msg}")).
+      map(denot => text(s"${denot.show} - ${denot.docs}")).
       getOrElse(text(s"${config.programName} - ${config.programDescription}")).
       ofWidth(config.textWidth).
       push(config.indentation).
@@ -202,7 +202,7 @@ object Man {
       map(_.rootOption).
       distinct.
       map(_.fold(emptySection) { denot =>
-        columned(denot.show, denot.docs.msg, max)
+        columned(denot.show, denot.docs, max)
       }).
       sequenceU
   }
