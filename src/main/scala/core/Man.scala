@@ -292,13 +292,14 @@ object Man {
     * @param corresponding shape of commands corresponding to input
     * @return a section of text that returns the box of suggestions given a `ManConfig`
     */
-  def suggest(input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = section { _ =>
+  def suggest(input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = section { config =>
     makeText {
       corresponding.
         map { tree =>
-          text((tree zips input).string(" ") {
-            case (_, Some(v)) => v
-            case (denot, _) => denot.show
+          text(tree.string(" ") {
+            case id@Identifier(Alternative(alts), _, _) if alts.size > 1 => s"[${id.show}]"
+            case tid@TypedIdentifier(Alternative(alts), _, _) if alts.size > 1 => s"[${tid.show}]"
+            case denot => denot.show
           })
         }
     }

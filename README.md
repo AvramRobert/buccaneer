@@ -149,9 +149,9 @@ For our `subtract` command from earlier, `--sgst` would print something like: <b
 <int> <int> 
 <Double> <Double>
 ```
-And for a more specific input like `subtract 1 --sgst`, it would print:
+For a more specific input, e.g. `subtract 1 --sgst`, this get's narrowed down appropriately:
 ```bash
-1 <int>
+<int> <int>
 ```
 <br />
 And that's about it.

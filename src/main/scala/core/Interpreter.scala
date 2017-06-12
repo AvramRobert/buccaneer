@@ -115,10 +115,9 @@ object Interpreter {
     if (input.isEmpty) commands
     else commands.filter {
       _.zipWithList(input).
-        toVector.
         forall {
-          case (Identifier(sym, _, _), value) => sym.exists(_ == value)
-          case (TypedIdentifier(sym, _, _), value) => sym.exists(x => value startsWith x)
+          case (Identifier(sym, _, _), value) => sym.exists(_ startsWith value)
+          case (TypedIdentifier(sym, _, _), value) => sym.exists(x => (x startsWith value) || (value startsWith x))
           case (Typing(p, _), value) => p(value).isSuccess
         }
     }

@@ -167,7 +167,15 @@ sealed trait Tree[+A] {
     */
   def foldLeft[B](b: B)(f: (B, A) => B): B = tailFold(List(this), b)(f)
 
-  /** Queries the root of the tree if with a predicate if it is present.
+  /** Predicative conjunction on all the elements of a tree.
+    * Returns true of all applications of `p` are true.
+    *
+    * @param p predicate to check against the tree elements
+    * @return predicative conjunction of all elements
+    */
+  def forall(p: A => Boolean): Boolean = foldLeft(true)((b, v) => b && p(v))
+
+  /** Queries the root of the tree with a predicate if it is present.
     * Returns `false` otherwise.
     *
     * @param p predicate for querying the root

@@ -39,7 +39,7 @@ object passwords {
     options(nextInt(options.size))
   }
 
-  val apg = Cli(
+  val passwords = Cli(
     version { () => List("Passwords 0.1.0") },
     empty { _ => generate() },
     exclusion { ex => generate(dictionary = exclude(ex)) },
@@ -86,9 +86,13 @@ object passwords {
       toList
   }
 
-  def main(args: Array[String]): Unit =
-    interpretH(apg, config).
-      run(args.toList).
-      foreach(_ foreach println)
+  implicit class ArgsOps(s: String) {
+    def args: List[String] = s.split(" ").toList
+  }
 
+  def main(args: Array[String]): Unit = {
+      interpretH(passwords, config).
+        run(args.toList).
+        foreach(_ foreach println)
+  }
 }
