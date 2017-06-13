@@ -45,16 +45,17 @@ object Implicits {
         .map(_.result())
     }
 
-  implicit def readMap[K, V](implicit proofK: Read[K], proofV: Read[V]): Read[Map[K, V]] = Read("Map") { s =>
-    val empty = success(Map.empty[K, V])
-    if (s.isEmpty) empty
-    else s.split(",")
-      .foldLeft(empty) { (vm, entry) =>
-        entry.split("=").toList match {
-          case key :: value :: Nil =>
-            (vm |@| proofK(key) |@| proofV(value)) ((m, k, v) => m + (k -> v))
-          case _ => failure(s"Cannot read map entry of `$entry`")
+  implicit def readMap[K, V](implicit proofK: Read[K], proofV: Read[V]): Read[Map[K, V]] =
+    Read("Map") { s =>
+      val empty = success(Map.empty[K, V])
+      if (s.isEmpty) empty
+      else s.split(",")
+        .foldLeft(empty) { (vm, entry) =>
+          entry.split("=").toList match {
+            case key :: value :: Nil =>
+              (vm |@| proofK(key) |@| proofV(value)) ((m, k, v) => m + (k -> v))
+            case _ => failure(s"Cannot read map entry of `$entry`")
+          }
         }
-      }
-  }
+    }
 }

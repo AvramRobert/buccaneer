@@ -1,7 +1,9 @@
 buccaneer
 =
-A (sort-of) library for writing command line applications quickly and effortlessly. 
-
+A (sort-of) library for writing command line applications quickly and effortlessly. <br />
+More descriptive information can be found here:
+ * [Docs](docs/documentation.md) - for a full description of its capabilities
+ * [Examples](src/main/scala/examples) - for concrete usage examples
 
 #### For the impatient
 The general idea in buccaneer is that you define commands very similarly to
@@ -20,12 +22,12 @@ val adder = (add - int - int)(_ + _)
 ```
 As you can see, you define the name of your command, what parameters it takes and then associate a 
 function block with that description. buccaneer makes sure that the associated function will always require 
-the exact parameters and arity that you defined in your description.  
+the exact arguments and arity that you defined in your description.  
 In the above example, the command takes 2 ints and therefore the associated function has an arity of two 
 with types `(Int, Int)`. 
 
 To run the command and print its result, you need only feed it 
-to the command interpreter provided by the library and give it the list of arguments necessary in order
+to one of the provided command interpreters and give it the list of arguments necessary in order
 to call it:
 
 ```scala
@@ -39,29 +41,29 @@ Interpreter.
   print
 ```
 Any boilerplate associated with parsing arguments, interpreting commands and propagating errors is done
-by the library. You need only concern yourself with the actual implementation, and not what happens in the 
+by the interpreter. You need only concern yourself with the actual implementation, and not what happens in the 
 background.
 
-
-All the primitives required to build commands are:
+#### Building commands 
+All the primitives required for building commands are:
 * `command(<name>)` 
-    * a command or subcommand identifier
+    * a command or sub-command identifier
 * `argument[A]` 
     * an argument of some type `A`
 * `option(<name>*)` 
     * an option identifier
 * `assignment[A](<name>*)` 
     * an association between a name and a type (for things like `a=5`)
-
+    
 Compound things like Lists and Maps are just types, that you define as type arguments. For example: 
 ```scala
 val listInts = argument[List[Int]]
 val addList = (add - listInts)(_.sum)
 ```
-<br />
-So how does one build a complete command line interface?
-<br />
-Well, you aggregate all the commands you've defined in the following fashion:
+#### Command line interfaces
+So how does one define a complete command line interface?
+
+Well, the arguments you've defined are simply aggregated in the following fashion:
 
 ```scala
 import buccaneer.core.DSL._
@@ -86,8 +88,8 @@ Cli(
 (subtract - double - double)(_ - _))
 ```
 This `Cli[Int]`-thing can also be interpreted and run. 
-The interpreter is able to automatically pick the appropriate command and
-run it, if the input matches any command from the interface:
+In this case, the interpreter automatically picks the appropriate command 
+from the interface and runs it, should the input match any command from the interface. Otherwise it prints an error.
 
 ```scala
 def runPrint(input: List[String]) = {
@@ -101,8 +103,9 @@ runPrint(List("subtract", "2", "1"))
 runPrint(List("add", "1", "2"))
 runPrint(List("subtract", "2.012321", "1.2323"))
 ```
-Finally, there is one additional interpreter called `interpretH`, which provides automatic MAN page generation and
-input suggestions. These can be triggered at ANY point throughout the invocation. To trigger them, an input 
+#### MAN pages and input suggestions
+Finally, there is one last interpreter called `interpretH`, which provides automatic MAN page generation and
+input suggestions. These can be triggered at any point throughout the invocation. To trigger them, an input 
 must always either end with `-help | --help` (for MAN pages) or `-sgst  | --sgst` (for suggestions). 
 (*Note*: These keywords are configurable): 
 ```scala
@@ -153,7 +156,7 @@ For a more specific input, e.g. `subtract 1 --sgst`, this get's narrowed down ap
 ```bash
 <int> <int>
 ```
-<br />
+#### Final thoughts
 And that's about it.
 You can now create arbitrarily large and complex command line interfaces. 
 Once you've defined one, you can feed it lists of arguments and run commands how and
@@ -168,5 +171,4 @@ def main(args: Array[String]): Unit = {
   runPrintH(args.toList)
 }
 ```
-To read about the full capabilities of this library, please take a look at the [docs](docs/documentation.md). <br />
-Some more concrete and extended examples can be found in the [examples](src/main/scala/examples) package. 
+For a bit more insight, I advise taking a look at either the [docs](docs/documentation.md) or [examples](src/main/scala/examples). (or both)

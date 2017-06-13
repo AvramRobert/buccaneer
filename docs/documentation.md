@@ -1,25 +1,23 @@
 ### Introduction
-buccaneer is a (rather opinionated) library for writing command line applications in a
-very declarative way. It takes care of all the boilerplate associated with parsing commands,
-error handling, command execution etc. and lets you only concern yourself with actually writing your 
-command line interface. In addition, it also comes with some interesting features, that you get
+buccaneer is a (rather opinionated) (sort-of) library for writing command line applications in a
+very declarative way. Its main goal is to take care of all the boilerplate associated with parsing commands,
+error handling, command execution etc. and let the user only concern himself with actually writing the
+command line interface. In addition, it also comes with some other interesting features, that you get
 for free.
 
 ### Commands
 The basic idea in buccaneer is that commands are defined very similarly to how
-functions are defined in most programming languages. They are _associations_ between 
+functions are defined in typed programming languages. They are _associations_ between 
 a signature and a function block. The signature defines the function's name and 
-domain (i.e. its _shape_), whilst the function block defines its behaviour and co-domain 
-(i.e. what it should do and return when it is invoked).
+domain (i.e. its _shape_), whilst the function block defines its co-domain (i.e. what it should return when invoked).
 <br />
 <br />
 This is essentially the main concept that pervades this entire library. You define a command
 by expressing what is expected to be input, and then associate a function with that expectation.
 That function will then naturally be run should the actual input match the expectation.
-<br />
-<br />
-An example:
-<br />
+
+##### Example
+
 Let's assume that you want to write a naive command line application that is to
 simulate a calculator. Naturally, the first thing you might want to support is the four
 basic operations: addition, subtraction, multiplication and division. So let's encode them:
@@ -39,9 +37,9 @@ val multiplier = (multiply - int - int)(_ * _) // multiply 2 3
 val divider = (divide - int - int)(_ / _) // divide 2 2
 ```
 As you can see, each command essentially _describes_ what it expects and has a
-function block associated with each expectation. This is all typesafe and concrete. 
-The function arity and parametricity to associate with each command signature is
-automatically defined by the elements in that signature. More concretely: 
+function block associated with each expectation. buccaneer also makes sure that the function
+block you associate also has the arity and parametricity you specified in the description. <br />
+More concretely: 
 ```scala
 
 (add) { () => ... } //arity 0
@@ -52,48 +50,62 @@ automatically defined by the elements in that signature. More concretely:
 }
 // and so on
 ```
-Great. Now what about command options, or key-value associations?
-<br />
+#### Building commands
 Commands are built using only 4 primitives:
 * `command(<name>)` 
-    * a command or subcommand identifier
+    * a command or sub-command identifier
 * `argument[A]` 
     * an argument of some type `A`
-* `option(<name>)` 
+* `option(<name>*)` 
     * an option identifier
+    * it accepts a variable number of names and treats them as alternatives
 * `assignment[A](<name>)` 
     * an association between a name and a type (for things like `a=5`)
+    * it accepts a variable number of names and treats them as alternatives
 
-**Note**: `argument[A]` and `assignment[A](<label>)` bump the arity 
-of the associated function block. <br />
 So how'd you use them? Well:
 ```scala 
-val r = option("-r" | "--r")
+val r = option("-r", "--r")
 val double = argument[Double]
 val aDouble = assignment[Double]("a=")
-val bDouble = assignment[Double]("b=")
+val bDouble = assignment[Double]("b="))
 
 val addRecursive = (add - r - int - int)(_ + _) // add -r 1 2
 val addAssignedDouble = (add - aDouble - aDouble)(_ + _) // add a=2.0 b=4.0
 ```
 And that's it. You simply mix these primitives together to create
-more complex commands, and then associate a function
-with that command. 
+more complex commands, and then associate a function with them. 
+
+**No argument commands**
+<br />
+What if I want a command that takes no arguments or options? 
+In this case, you would be running your program effectively with no input. <br />
+In general, functions with no arguments are essentially functions from `Unit => A`. <br />
+buccanneer has the same behaviour:
+```scala
+val nothing = argument[Unit]
+
+val cli = Cli(
+(nothing) { () => println("I hope you've not expected much.") }  
+...
+)
+```
 
 ### Types and Values
 When declaring a type argument or type assignment,
 a `Read[A]` instance for that particular type is implicitly required. The `Read[A]` instance 
 defines how a string should be converted to that
-particular type. The `bucanneer.core.Implicits` package already contains `Read[A]` instances 
+particular type. Additionally it also specifies a string representation for `A`. 
+The `bucanneer.core.Implicits` package already contains `Read[A]` instances 
 for a number of types. Please note, that some of them have some minor syntactic requirements in
-order to avoid ambiguity:
+order to avoid ambiguity. <br />
+* **Unit**
 * **String**
 * **Boolean**
     * "true" and "false"
 * **Int**
     * any natural number
-    * Example: _1_ , _2_ , _3_ , _42_ .. <br /> 
-    **Note** _1_ is an `Int` but _1.0_ is **NOT**
+    * Example: _1_ , _2_ , _3_ , _42_ ..
 * **Double** 
     * any number with explicit decimal points 
     * Example: _1.0_, _54.23_, _102.2_ ..
@@ -116,13 +128,17 @@ order to avoid ambiguity:
     * string paths
     * Example: _/home/myfiles/Downloads_
 
-You can however also define your own instances:
+
+You can however also define your own instances. <br />
+**Note**: Because `Read[A]` instances also contain a string representation
+of their type `A`, this has to also be specified with its definition.
+
 ```scala
 import bucanneer.core.Read._
 
 case class Fraction(num: Int, denom: Int)
 
-implicit val readFraction = read[Fraction] { (input: String) => 
+implicit val readFraction: Read[Fraction] = read("Fraction") { (input: String) => 
   if(input.contains("/") && input.split("/").length == 2) {
     val split = input.split("/")
     success(Fraction(split(0).toInt, split(1).toInt))
@@ -145,7 +161,7 @@ case class Fraction(num: Int, denom: Int)
 // unsafeCoerce is a wrapper around try { } catch { }
 def intable(input: String): Result[Int] = unsafeCoerce(input)(_.toInt)
   
-implicit val readFraction = read[Fraction] { (input: String) => 
+implicit val readFraction: Read[Fraction] = read("Fraction") { (input: String) => 
   if (input.contains("/") && input.split("/").length == 2) {
     val split = input.split("/")
     (intable(split(0)) |@| intable(split(1))) {
@@ -157,15 +173,12 @@ implicit val readFraction = read[Fraction] { (input: String) =>
 }
 ```
 ### Running commands
-So how do you actually _run_ your commands?
-<br />
-Commands are run by _interpreting_ a command line input relative to a command signature. What happens
-is that the input is taken and matched against the command signature. If the input
+Commands are run by _interpreting_ a command line input relative to the command signature. The input is taken and matched against the command signature. If the input
 conforms to the signature, then the function associated with that signature is run.
 Otherwise, the inconsistencies and errors are accumulated and returned as a failure. 
 <br />
 <br />
-buccaneer comes with an `Interpreter` that does all of this and
+buccaneer comes with a number of interpreters that do all of this and
 more. Let's take the previously defined calculator commands and run some of them:
 ```scala
 import buccaneer.core.Interpreter
@@ -183,10 +196,7 @@ Interpreter.
   run(badInput).
   fold(println)(println)(println) // => List[Throwable] => ...
 ```
-Right.. I'll show you in a second how you define a complete command
-line interface and run individual commands from it, but first I would like to address the `fold`.
-<br />
-<br />
+Wait, why the fold? <br />
 The reason we `fold` is because the result of an interpretation can be one of three things: 
 * Success: `A => B` - the "happy" case. Here, the supplied input matched the signature and the 
 function associated with it had been run. Now you are required to do something 
@@ -222,11 +232,11 @@ val interface = Cli(adder, subtractor, multiplier, divider)
 ```
 This `Cli[A]` thing is actually just a `Map` from command signatures to the 
 commands themselves. One interesting thing about it is that its type parameter `A` will automatically
-be inferred to `Any` if the result type of two or more commands does not line up.
+be inferred to `Any` if the result type of two or more commands are not homogeneous.
 <br />
 <br />
-To run command inputs against the whole interface, we need only feed it again to the `Interpreter`.
-The `Interpreter` can both handle single commands, but also complete interfaces. In the
+To run command inputs against the whole interface, we need only feed it to one of the interpreters.
+There are interpreters for handling both single commands, but also complete interfaces. In the
 latter case, it will automatically resolve and find the command signature that
 matches the given input, and run its associated function. If no command is found, or the input is 
 malformed, then it shall appropriately return a failure:
@@ -248,6 +258,13 @@ run(input1) // => 1
 run(input2) // => 1
 run(input3) // => No command found
 ```
+**Note:** Because the intepreter has to essentially determine which command signature fits best the
+provided input, it does not know a priori what exact description will match. As such, it cannot aggregate
+errors in this case and output them. If it were, then it would print the errors for *all* 
+command signatures it tried to match against. Instead, in case of failure, it simply says that a command
+has not been found. 
+<br />
+<br />
 And that's it. You can now create arbitrarily large and complex command
 line interfaces. Before you start, you may however want to read the next
 section. There are some interesting things that you get for free. 
@@ -267,7 +284,7 @@ val interface = Cli(
   (add - int - int)(_ + _),
   (subtract - int - int)(_ - _))
 ```
-In order to receive MAN page support, you need only use a version of the interpreter that 
+In order to receive MAN page support, you need only use the interpreter that 
 builds this feature in:
 ```scala
 def print(input: List[String]) = {
@@ -277,11 +294,11 @@ Interpreter.
   print
 }
 ```
-Now, any time a command input ends with "-help" or "--help", 
+Now, any time a command input ends with `-help` or `--help` (you can change these), 
 the interpreter will compile a MAN page using the command
 signatures and then print it. 
 <br />
-<b>Note</b>: "-help" or "--help" can be called at ANY point during command input.
+<b>Note</b>: `-help` or `--help` can be called at any point during command input.
 ```scala
 val help1 = List("add", "--help")
 val help2 = List("add", "1", "--help")
@@ -290,42 +307,96 @@ print(help1)
 println(help2)
 ```
 Both of these will print a variation of the following: 
+```bash
+NAME
+    <current command name> - <current command description>
 
+USAGE
+    <current command>  [<option1>] [<option2>] [<option3a> | <option3b>]
+                       [<option4>] [<option5>] [...]
 
-##### Configuration 
-You are additionally given the possibility to somewhat configure the outputted MAN page. 
-The text width, column spacing and indentation of a MAN page are taken by the interpreter
-from a case class as configuration. If you so desire, you can define your own 
-configuration and feed it to the interpreter:
-```scala
-val myConfig = manConfig(textWidth = 200, 
-                         indentation = 10, 
-                         columnSpacing = 10)
-
-def print(input: List[String]) = {
-Interpreter.
-    interpretH(interface, myConfig).
-    run(input).
-    print
-}
+OPTIONS
+    <option1>                         <option1 description>
+    <option2>                         <option2 description>
+    <option3a> | <option3b>           <option3 description>
+    <option4>                         <option4 description>
+    <option5>                         <option5 description>
+    <...>                             <...>
+    
+SUB-COMMANDS
+    <sub-command1>                    <sub-command1 description>
+    <sub-command2>                    <sub-command2 description>
+    <...>                             <...>
 ```
-
 ##### Input suggestions
 Again, due to the way commands signatures are modeled, the system is able to support 
-dynamic input suggestions. Any time a command input ends with "-sgst" or
-"--sgst", the interpreter will use the command signatures to compile a list of suggestions that 
+dynamic input suggestions. Any time a command input ends with `-sgst` or
+`--sgst` (you can change these), the interpreter will use the command signatures to compile a list of suggestions that 
 partially match that given input. 
 <br />
-<b>Note</b>: Similar to MAN pages, these can be called at ANY point during
+<b>Note</b>: Similar to MAN pages, these can be called at any point during
 command input:
 ```scala
 val suggest1 = List("add", "--sgst")
 val suggest2 = List("subtract", "1", "--sgst")
 
-print(suggest1) // => add <value> <value>
-print(suggest2) // => add 1 <value>
+print(suggest1) // => <Int> <Int>
+print(suggest2) // => <Int> <Int>
 ```
 
+##### Configuration 
+You are additionally given the possibility to configure the MAN page.
+More concretely, you can provide the following information:
+* **Application name**
+  * This is a somewhat necessary requirement, as I do not necessarily have direct access to how
+  the application is called. Essentially it should be the `<name>` in `<name> add 1 2`.
+  This gets printed in the MAN page.
+* **Application description**
+  * A description of the application. This gets printed next to the application name.
+* **Help**
+  * You can change the options that trigger both the MAN page and input suggestions. 
+    Because they are simply options, you define them analogously to how command
+    options are defined. Contrary to the CLI options, you just pass thesseto the configuration instead of the Cli itself.
+    ```scala
+    val myhelp = option("-h", "--help").msg("Prints this page.")
+    ```
+*  **Suggestions**
+   * Analogous to **Help**:
+   ```scala
+   val mysuggest = option("-s", "--suggest").msg("Returns a list of input suggestions")
+   ```
+*  **Text width**
+   * The overall text width per text block in a MAN page is alterable. Width is defined in terms of 
+   the desired number of characters per line.
+
+*  **Indentation**
+   * The indentation per line is also configurable. Indentation is defined in terms of the desired
+   number of empty characters at the beginning of indented lines.
+
+*  **Column spacing**
+   * The spacing used between parallel columns is alterable. Spacing is defined in terms of 
+   the desired number of empty characters between words/sentences.   
+
+
+```scala
+val manconf = manpage(
+  programName = "calculator",
+  programDescription = "A simple calculator",
+  help = myhelp,
+  suggest = mysuggest,
+  textWidth = 200,
+  indentation = 10
+  columnSpacing = 10)
+
+def print(input: List[String]) = {
+Interpreter.
+    interpretH(interface, manconf).
+    run(input).
+    print
+}
+```
+
+For concrete examples, take a look at the [examples](src/main/scala/examples) package.
 ### Macros (sort-of)
 The command interpreter is _very_ similar to how a programming language compiler is built.
 It is a composition of a series of phases, that take the result of the previous phase, validate
