@@ -6,8 +6,8 @@
  > 3. Making unit is the default will lead to ambiguity when commands
       have only options.
 
-4. When no input provided, the interpolation throws an exception.
-   In this case, I should provide a standard empty input and let it work with that.
+ > 4. When no input provided, the interpolation throws an exception.
+      In this case, I should provide a standard empty input and let it work with that.
 
 == TO DO ==
  > 0. HelpConfig should contain the name of the program and use it when no title is found. Also add it to usage.

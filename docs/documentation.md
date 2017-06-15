@@ -1,11 +1,11 @@
 ### Introduction
-buccaneer is a (rather opinionated) (sort-of) library for writing command line applications in a
+*buccaneer* is a (rather opinionated) (sort-of) library for writing command line applications in a
 very declarative way. Its main goal is to take care of all the boilerplate associated with argument parsing,
 error handling, command execution etc. and let the user only concern himself with actually writing the
 command line interface. In addition, it provides some other interesting features, that come for free.
 
 ### Commands
-The basic idea in buccaneer is that commands are defined very similarly to how
+The basic idea in *buccaneer* is that commands are defined very similarly to how
 functions are defined in typed programming languages. They are _associations_ between 
 a signature and a function block. The signature defines the function's name and 
 domain (i.e. its _shape_), whilst the function block defines its co-domain (i.e. what it should return when invoked).
@@ -223,7 +223,7 @@ interpretation yields some information about the command or the interface itself
 it is used for things like MAN pages. For example, in the case of a MAN page, the string value is the page itself.
 
 In most situations, the thing you generally do with each of these is that you print them.
-Because this is somewhat the most common behaviour, buccaneer already provides a printing function that 
+Because this is somewhat the most common behaviour, *buccaneer* already provides a printing function that 
 prints the result of a command in a conveniently formatted way:
 ```scala
 Intepreter.
@@ -419,7 +419,7 @@ More concretely, you can provide the following information:
    * The spacing used between parallel columns is alterable. Spacing is defined in terms of 
    the desired number of empty characters columns.   
 
-
+**Example:**
 ```scala
 val manconf = manpage(
   programName = "calculator",

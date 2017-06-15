@@ -133,7 +133,6 @@ object Man {
     go(command)
   }
 
-
   /** Given a number of command shapes, returns the size of the command
     * whose string representation is largest.
     *

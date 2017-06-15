@@ -21,6 +21,19 @@ class InterpreterSpec extends DefaultTestSuite {
       }
     }
 
+    "correctly interpret commands without arguments" in {
+      forAll { (name: String, a: Int, b: Int, f: (Int, Int) => Int) =>
+        val empty = argument[Unit]
+        val cli = Cli(
+          (command(name) - argument[Int] - argument[Int])(f),
+          empty { _ => f(a, b) }
+        )
+
+        checkSucc(Interpreter.interpretH(cli).run(List(name, a.toString, b.toString)), f(a, b))
+        checkSucc(Interpreter.interpretH(cli).run(List()), f(a, b))
+      }
+    }
+
     "correctly pick-out commands from a cli and interpret them" in {
       forAll { (name: String, int: Int, bool: Boolean, string: String, f: (Int, Int) => Int, g: Boolean => Boolean) =>
         val h = (x: Boolean, y: Int, z: Int) => g(x) && f(y, z) > 0

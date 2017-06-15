@@ -62,14 +62,23 @@ val listInts = argument[List[Int]]
 val addList = (add - listInts)(_.sum)
 ```
 
-Additionally, arguments and assignments may also be bound by a conditional: 
+Additionally, arguments and assignments may also be bound by a conditional, that futher check the input value: 
  ```scala
  
 val posInt = argument[Int]((i: Int) => i > 0)
 val posA = assignment[Int]((i: Int) => i > 0)("a=")
 ```
-The type has to be specified here due to Scala's flowing type inference, which cannot properly infer
+The type has to be specified here due to Scala's left-to-right flowing type inference, which cannot properly infer
 the type of the function. 
+<br />
+<br />
+No argument or option commands are defined as command of a single `Unit` argument:
+```scala
+val nothing = argument[Unit]
+
+(nothing) {_ => println("I run with no input") }
+```
+
 #### Command line interfaces
 So how does one define a complete command line interface?
 
@@ -159,12 +168,12 @@ SUB-COMMANDS
 
 For our `subtract` command from earlier, `--sgst` would print something like: <br />
 ```bash
-<int> <int> 
+<Int> <Int> 
 <Double> <Double>
 ```
 For a more specific input, e.g. `subtract 1 --sgst`, this get's narrowed down appropriately:
 ```bash
-<int> <int>
+<Int> <Int>
 ```
 #### Final thoughts
 And that's about it.

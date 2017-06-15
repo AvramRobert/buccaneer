@@ -199,13 +199,14 @@ object Interpreter {
         case set => Meta(f(command, set).run(manConfig))
       }
     }
+    val lastArg = input.lastOption
 
-    (manConfig.help.symbol.find(_ == input.last),
-      manConfig.suggest.symbol.find(_ == input.last)) match {
-      case (Some(_), _) => show(Man.help)
-      case (_, Some(_)) => show(Man.suggest)
-      case _ => Transform(success(input))
-    }
+    lastArg.
+    flatMap(x => manConfig.help.symbol.find(_ == x)).
+    map(_ => show(Man.help)).
+    orElse(lastArg.flatMap(x => manConfig.suggest.symbol.find(_ == x))).
+    map(_ => show(Man.suggest)).
+    getOrElse(Transform(success(input)))
   }
 
   /** Zips a command line input with all command shapes that matches that input in size.
@@ -214,9 +215,10 @@ object Interpreter {
     * @return an interpretation step
     */
   def interpolate(commands: Set[Shape]) = transform { (input: List[String]) =>
+    val args = if(input.isEmpty) List("") else input
     commands.
-      filter(_.depth == input.size).
-      map(_ zipWithList input).
+      filter(_.depth == args.size).
+      map(_ zipWithList args).
       toList.
       successNel
   }
