@@ -1,9 +1,8 @@
 ### Introduction
 buccaneer is a (rather opinionated) (sort-of) library for writing command line applications in a
-very declarative way. Its main goal is to take care of all the boilerplate associated with parsing commands,
+very declarative way. Its main goal is to take care of all the boilerplate associated with argument parsing,
 error handling, command execution etc. and let the user only concern himself with actually writing the
-command line interface. In addition, it also comes with some other interesting features, that you get
-for free.
+command line interface. In addition, it provides some other interesting features, that come for free.
 
 ### Commands
 The basic idea in buccaneer is that commands are defined very similarly to how
@@ -37,7 +36,7 @@ val multiplier = (multiply - int - int)(_ * _) // multiply 2 3
 val divider = (divide - int - int)(_ / _) // divide 2 2
 ```
 As you can see, each command essentially _describes_ what it expects and has a
-function block associated with each expectation. buccaneer also makes sure that the function
+function block associated with each expectation. *buccaneer* also makes sure that the function
 block you associate also has the arity and parametricity you specified in the description. <br />
 More concretely: 
 ```scala
@@ -62,19 +61,30 @@ Commands are built using only 4 primitives:
 * `assignment[A](<name>)` 
     * an association between a name and a type (for things like `a=5`)
     * it accepts a variable number of names and treats them as alternatives
+    
+Additionally, arguments and assignments may accept conditionals, that further check the input value:
+```scala
 
-So how'd you use them? Well:
+val posInt = argument[Int]((i: Int) => i > 0)
+val posAssign = assignment[Int]((i: Int) => i > 0)("a=")
+```
+The reason you  have to specify a type here is because of Scala's left-to-right
+flowing type inference, which cannot infer a lambda's type if it
+is defined within the first parameter list. 
+
+**Usage**
+<br />
+So now, how'd you use them? Well:
 ```scala 
 val r = option("-r", "--r")
 val double = argument[Double]
 val aDouble = assignment[Double]("a=")
-val bDouble = assignment[Double]("b="))
+val bDouble = assignment[Double]("b=")
 
 val addRecursive = (add - r - int - int)(_ + _) // add -r 1 2
 val addAssignedDouble = (add - aDouble - aDouble)(_ + _) // add a=2.0 b=4.0
 ```
-And that's it. You simply mix these primitives together to create
-more complex commands, and then associate a function with them. 
+
 
 **No argument commands**
 <br />
@@ -90,6 +100,9 @@ val cli = Cli(
 ...
 )
 ```
+
+And that's it. All you have to do is simply mix these primitives together to create
+more complex commands. 
 
 ### Types and Values
 When declaring a type argument or type assignment,
@@ -173,12 +186,13 @@ implicit val readFraction: Read[Fraction] = read("Fraction") { (input: String) =
 }
 ```
 ### Running commands
-Commands are run by _interpreting_ a command line input relative to the command signature. The input is taken and matched against the command signature. If the input
-conforms to the signature, then the function associated with that signature is run.
+Commands are run by _interpreting_ a command line input relative to a command signature. 
+The input is taken and matched against that signature. If the input
+conforms to the signature, then the function associated with it is run.
 Otherwise, the inconsistencies and errors are accumulated and returned as a failure. 
 <br />
 <br />
-buccaneer comes with a number of interpreters that do all of this and
+*buccaneer* comes with a number of interpreters that do all of this and
 more. Let's take the previously defined calculator commands and run some of them:
 ```scala
 import buccaneer.core.Interpreter
@@ -206,8 +220,7 @@ matched the signature, or some parts of the input have been proven malformed. No
 do something with the errors that have been accumulated. 
 * Meta: `String => B` - the "informative" case. This case is specifically reserved for when the 
 interpretation yields some information about the command or the interface itself. In essence,
-it is used for things like MAN pages and
-input suggestions. For example, in the case of a MAN page, the string value is the page itself.
+it is used for things like MAN pages. For example, in the case of a MAN page, the string value is the page itself.
 
 In most situations, the thing you generally do with each of these is that you print them.
 Because this is somewhat the most common behaviour, buccaneer already provides a printing function that 
@@ -223,15 +236,15 @@ then the `fold` allows you directly handle the result of an interpretation.
 
 ### Creating a command line interface
 Now that we have commands and know how to run them, it is time to define a complete interface. 
-A command line interface in buccaneer is just an aggregation of all the individual commands
+A command line interface in *buccaneer* is just an aggregation of all the individual commands
 you've defined so far: 
 ```scala
 import buccaneer.core.Cli
 
-val interface = Cli(adder, subtractor, multiplier, divider)
+val interface: Cli[Int] = Cli(adder, subtractor, multiplier, divider)
 ```
-This `Cli[A]` thing is actually just a `Map` from command signatures to the 
-commands themselves. One interesting thing about it is that its type parameter `A` will automatically
+This `Cli[Int]`-thing is actually just a `Map` from command signatures to the 
+commands themselves. One interesting thing about it is that its type parameter will automatically
 be inferred to `Any` if the result type of two or more commands are not homogeneous.
 <br />
 <br />
@@ -258,19 +271,19 @@ run(input1) // => 1
 run(input2) // => 1
 run(input3) // => No command found
 ```
-**Note:** Because the intepreter has to essentially determine which command signature fits best the
-provided input, it does not know a priori what exact description will match. As such, it cannot aggregate
-errors in this case and output them. If it were, then it would print the errors for *all* 
-command signatures it tried to match against. Instead, in case of failure, it simply says that a command
-has not been found. 
+**Note:** Because the intepreter has to essentially first determine which command signature best fits the
+provided input, it does not know a priori what exact description will match. As such, in the case of
+complete interfaces, it cannot aggregate errors and output them. If it were to do so, 
+then it would return the errors of *all* command signatures it tried to match against but failed. 
+Instead, in case of failure, it simply says that a command has not been found. 
 <br />
 <br />
 And that's it. You can now create arbitrarily large and complex command
 line interfaces. Before you start, you may however want to read the next
-section. There are some interesting things that you get for free. 
+section. There are some additional interesting features that come for free. 
 
-### Man pages and input suggestions
-Due to the way command signatures are modeled, buccaneer is able to generate MAN pages 
+### MAN pages and input suggestions
+Due to the way command signatures are modeled, *buccaneer* is able to generate MAN pages 
 and offer command input suggestions dynamically and for free! 
 ##### MAN pages
 Each primitive you use for composing commands may additionally receive a `String` description,
@@ -279,15 +292,18 @@ that is displayed in the MAN page representation of that command.
 val add = command("add").msg("The add command")
 val subtract = command("subtract").msg("The subtract command")
 val int = argument[Int].msg("An integer argument")
+vall double = argument[Double].msg("A double argument")
 
 val interface = Cli(
   (add - int - int)(_ + _),
-  (subtract - int - int)(_ - _))
+  (add - double - double)(_ - _),
+  (subtract - int - int)(_ - _),
+  (subtract - double - double)(_ - _))
 ```
 In order to receive MAN page support, you need only use the interpreter that 
 builds this feature in:
 ```scala
-def print(input: List[String]) = {
+def runPrint(input: List[String]) = {
 Interpreter.
   interpretH(interface).
   run(input).
@@ -303,10 +319,26 @@ signatures and then print it.
 val help1 = List("add", "--help")
 val help2 = List("add", "1", "--help")
 
-print(help1)
-println(help2)
+runPrint(help1)
+runPrint(help2)
 ```
 Both of these will print a variation of the following: 
+```bash
+NAME
+    add - The add command
+
+USAGE
+    add  [Int] [Double]
+
+OPTIONS
+    <Int> <Int>                       An integer argument
+    <Double> <Double>                 A double argument
+    
+SUB-COMMANDS
+    No sub-commands avaliable
+```
+
+In general , `--help` will return a page with the following template:
 ```bash
 NAME
     <current command name> - <current command description>
@@ -328,35 +360,45 @@ SUB-COMMANDS
     <sub-command2>                    <sub-command2 description>
     <...>                             <...>
 ```
+
 ##### Input suggestions
 Again, due to the way commands signatures are modeled, the system is able to support 
 dynamic input suggestions. Any time a command input ends with `-sgst` or
 `--sgst` (you can change these), the interpreter will use the command signatures to compile a list of suggestions that 
 partially match that given input. 
 <br />
-<b>Note</b>: Similar to MAN pages, these can be called at any point during
-command input:
+<b>Note</b>: Similar to MAN pages, these can be called at any point during invocation:
 ```scala
-val suggest1 = List("add", "--sgst")
-val suggest2 = List("subtract", "1", "--sgst")
+runPrint(List("subtract","--sgst"))
+```
+Will print something along the lines of: 
+```bash
+<Int> <Int>
+<Double> <Double>
+```
 
-print(suggest1) // => <Int> <Int>
-print(suggest2) // => <Int> <Int>
+Whilst:
+```scala
+runPrint(List("subtract", "1", "--sgst"))
+```
+Will narrow down accordingly and print:
+```bash
+<Int> <Int>
 ```
 
 ##### Configuration 
 You are additionally given the possibility to configure the MAN page.
 More concretely, you can provide the following information:
 * **Application name**
-  * This is a somewhat necessary requirement, as I do not necessarily have direct access to how
+  * This is a somewhat necessary requirement, as I do not really have direct access to how
   the application is called. Essentially it should be the `<name>` in `<name> add 1 2`.
   This gets printed in the MAN page.
 * **Application description**
-  * A description of the application. This gets printed next to the application name.
+  * A description of the application. This gets printed next to the **Application name**.
 * **Help**
   * You can change the options that trigger both the MAN page and input suggestions. 
     Because they are simply options, you define them analogously to how command
-    options are defined. Contrary to the CLI options, you just pass thesseto the configuration instead of the Cli itself.
+    options are defined. These however get passed to the configuration instead of the CLI itself.
     ```scala
     val myhelp = option("-h", "--help").msg("Prints this page.")
     ```
@@ -366,7 +408,7 @@ More concretely, you can provide the following information:
    val mysuggest = option("-s", "--suggest").msg("Returns a list of input suggestions")
    ```
 *  **Text width**
-   * The overall text width per text block in a MAN page is alterable. Width is defined in terms of 
+   * The overall line width per text block in a MAN page is alterable. Width is defined in terms of 
    the desired number of characters per line.
 
 *  **Indentation**
@@ -375,7 +417,7 @@ More concretely, you can provide the following information:
 
 *  **Column spacing**
    * The spacing used between parallel columns is alterable. Spacing is defined in terms of 
-   the desired number of empty characters between words/sentences.   
+   the desired number of empty characters columns.   
 
 
 ```scala
@@ -396,12 +438,12 @@ Interpreter.
 }
 ```
 
-For concrete examples, take a look at the [examples](src/main/scala/examples) package.
+For concrete examples, take a look at the [examples](../src/main/scala/examples) package.
 ### Macros (sort-of)
 The command interpreter is _very_ similar to how a programming language compiler is built.
 It is a composition of a series of phases, that take the result of the previous phase, validate
-and transform it in some way, and then pass it on. In buccaneer, each phase is actually
-a pure function that is composed with other pure functions. More concretely, they are
+and transform it in some way, and then pass it on. In *buccaneer*, each phase is actually
+a pure function that is composed of other pure functions. More concretely, they are
 Kleisli compositions. 
 <br />
 <br />
