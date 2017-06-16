@@ -91,7 +91,7 @@ val addAssignedDouble = (add - aDouble - aDouble)(_ + _) // add a=2.0 b=4.0
 What if I want a command that takes no arguments or options? 
 In this case, you would be running your program effectively with no input. <br />
 In general, functions with no arguments are essentially functions from `Unit => A`. <br />
-buccanneer has the same behaviour:
+*buccanneer* has the same behaviour:
 ```scala
 val nothing = argument[Unit]
 

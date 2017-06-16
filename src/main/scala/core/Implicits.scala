@@ -36,7 +36,7 @@ object Implicits {
   implicit val readFile: Read[File] = Read("Path")(unsafeCoerce(_)(x => new File(x)))
 
   implicit def readColl[T[X] <: TraversableOnce[X], A](implicit proof: Read[A], cbf: CanBuildFrom[T[A], A, T[A]]): Read[T[A]] =
-    Read("Collection") { s =>
+    Read(s"Coll[${proof.show}]") { s =>
       if (s.isEmpty) success(cbf().result())
       else s.split(",")
         .foldLeft(success(cbf())) { (builder, value) =>
@@ -46,7 +46,7 @@ object Implicits {
     }
 
   implicit def readMap[K, V](implicit proofK: Read[K], proofV: Read[V]): Read[Map[K, V]] =
-    Read("Map") { s =>
+    Read(s"Map[${proofK.show}, ${proofV.show}]") { s =>
       val empty = success(Map.empty[K, V])
       if (s.isEmpty) empty
       else s.split(",")

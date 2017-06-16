@@ -6,7 +6,7 @@ More descriptive information can be found here:
  * [Examples](src/main/scala/examples) - for concrete usage examples
 
 #### For the impatient
-The general idea in buccaneer is that you define commands very similarly to
+The general idea in *buccaneer* is that you define commands very similarly to
 how functions are defined in typed programming languages. They are associations between 
 a signature and a function block.
 
@@ -23,7 +23,7 @@ val adder = (add - int - int)(_ + _)
 ```
 As you can see, you define the name of your command, what parameters it takes and then associate a 
 function block with them. *buccaneer* makes sure that the associated function will always require 
-the exact arguments and arity that you defined in your description.  
+the exact arguments and arity that you've defined in your description.  
 In the above example, the command takes 2 ints and therefore the associated function has an arity of two 
 with types `(Int, Int)`. 
 
@@ -62,17 +62,17 @@ val listInts = argument[List[Int]]
 val addList = (add - listInts)(_.sum)
 ```
 
-Additionally, arguments and assignments may also be bound by a conditional, that futher check the input value: 
+Additionally, arguments and assignments may also be constrained by a conditional, that futher check the input value: 
  ```scala
  
 val posInt = argument[Int]((i: Int) => i > 0)
 val posA = assignment[Int]((i: Int) => i > 0)("a=")
 ```
-The type has to be specified here due to Scala's left-to-right flowing type inference, which cannot properly infer
+**Note:**: The type has to be specified here due to Scala's left-to-right flowing type inference, which cannot properly infer
 the type of the function. 
 <br />
 <br />
-No argument or option commands are defined as command of a single `Unit` argument:
+No argument or option commands are defined as commands of a single `Unit` argument:
 ```scala
 val nothing = argument[Unit]
 
