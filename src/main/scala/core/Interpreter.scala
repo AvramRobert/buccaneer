@@ -215,7 +215,7 @@ object Interpreter {
     * @return an interpretation step
     */
   def interpolate(commands: Set[Shape]) = transform { (input: List[String]) =>
-    val args = if(input.isEmpty) List("") else input
+    val args = if (input.isEmpty) List("") else input
     commands.
       filter(_.depth == args.size).
       map(_ zipWithList args).
@@ -258,7 +258,13 @@ object Interpreter {
     commands match {
       case h :: Nil => success(h)
       case Nil => failure("No command found matching input")
-      case _ => failure(s"Ambiguous input. ${commands.size} match given input")
+      case xs => failure {
+        s"Ambiguous input. There are ${xs.size} matches for this input\n" +
+          xs.
+            map(_.string(" ")(_._1.show)).
+            map(x => Formatter(x).push(5).runMake).
+            mkString("")
+      }
     }
   }
 

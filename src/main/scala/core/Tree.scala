@@ -231,7 +231,11 @@ sealed trait Tree[+A] {
     * @param show function that converts the tree's values to `String`
     * @return string containing each value of the tree separated by the given separator
     */
-  def string(sep: String)(show: A => String): String = foldLeft("")((x, y) => x + sep + show(y))
+  def string(sep: String)(show: A => String): String = {
+    val xs = foldLeft("")((x, y) => x + show(y) + sep)
+    if(sep.isEmpty) xs
+    else xs.dropRight(1)
+  }
 
   private final def affixP[X](ths: Tree[X], tht: Tree[X]): Tree[X] = ths match {
     case Node(v, lt, rt) => Node(v, lt, affixP(rt, tht))

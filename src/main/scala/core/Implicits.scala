@@ -36,23 +36,23 @@ object Implicits {
   implicit val readFile: Read[File] = Read("Path")(unsafeCoerce(_)(x => new File(x)))
 
   implicit def readColl[T[X] <: TraversableOnce[X], A](implicit proof: Read[A], cbf: CanBuildFrom[T[A], A, T[A]]): Read[T[A]] =
-    Read(s"Coll[${proof.show}]") {
-      case "" => failure("Cannot read values from empty collection")
-      case scoll if scoll.contains(",") =>
-        scoll.split(",")
-          .foldLeft(success(cbf())) { (builder, value) =>
-            (builder |@| proof(value)) (_ += _)
-          }
-          .map(_.result())
-      case scoll => failure(s"Cannot read malformed collection of $scoll")
+    Read(s"Coll[${proof.show}]") { s =>
+      if (s.isEmpty)
+        failure("Cannot read values from empty collection")
+      else s.split(",")
+        .foldLeft(success(cbf())) { (builder, value) =>
+          (builder |@| proof(value)) (_ += _)
+        }
+        .map(_.result())
     }
 
   implicit def readMap[K, V](implicit proofK: Read[K], proofV: Read[V]): Read[Map[K, V]] =
-    Read(s"Map[${proofK.show}, ${proofV.show}]") {
-      case "" => failure("Cannot read values from empty map")
-      case smap =>
+    Read(s"Map[${proofK.show}, ${proofV.show}]") { s =>
+      if (s.isEmpty)
+        failure("Cannot read values from empty map")
+      else {
         val empty = success(Map.empty[K, V])
-        smap.split(",")
+        s.split(",")
           .foldLeft(empty) { (vm, entry) =>
             entry.split("=").toList match {
               case key :: value :: Nil =>
@@ -60,5 +60,6 @@ object Implicits {
               case _ => failure(s"Cannot read map entry of `$entry`")
             }
           }
+      }
     }
 }
