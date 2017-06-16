@@ -73,15 +73,23 @@ class ReadSpec extends DefaultTestSuite {
 
     "read arbitrary collections" in {
       forAll { (list: List[Int], vector: Vector[Double], set: Set[Boolean]) =>
-        readColl[List, Int].apply(list.mkString(",")) shouldBe Success(list)
-        readColl[Vector, Double].apply(vector.mkString(",")) shouldBe Success(vector)
-        readColl[Set, Boolean].apply(set.mkString(",")) shouldBe Success(set)
+        whenever(list.nonEmpty) {
+          readColl[List, Int].apply(list.mkString(",")) shouldBe Success(list)
+        }
+        whenever(vector.nonEmpty) {
+          readColl[Vector, Double].apply(vector.mkString(",")) shouldBe Success(vector)
+        }
+        whenever(set.nonEmpty) {
+          readColl[Set, Boolean].apply(set.mkString(",")) shouldBe Success(set)
+        }
       }
     }
 
     "read maps" in {
       forAll { (map: Map[Int, Double]) =>
-        readMap[Int, Double].apply(map.foldLeft("")((str, entry) => str + s"${entry._1}=${entry._2},").dropRight(1)) shouldBe Success(map)
+        whenever(map.nonEmpty) {
+          readMap[Int, Double].apply(map.foldLeft("")((str, entry) => str + s"${entry._1}=${entry._2},").dropRight(1)) shouldBe Success(map)
+        }
       }
     }
 
