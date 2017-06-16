@@ -18,6 +18,7 @@ object passwords {
   val max = assignment[Int]((i: Int) => i >= 5)("max=", "x=").msg("Maximal password length. Values lower than 5 are not accepted")
   val exclusion = assignment[String]("exclude=").msg("String of characters that should be excluded from the creation process")
   val version = option("-v", "--version").msg("Outputs the current version")
+  val list = argument[List[Double]]
 
   val config = manpage(
     programName = "passwords",
@@ -42,6 +43,7 @@ object passwords {
   val passwords = Cli(
     version { () => List("Passwords 0.1.0") },
     empty { _ => generate() },
+    list { _ => generate() },
     exclusion { ex => generate(dictionary = exclude(ex)) },
     seed { seed => generate(seed = seed) },
     max { max => generate(minLength = pickMin(max), maxLength = max) },

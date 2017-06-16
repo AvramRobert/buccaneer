@@ -199,14 +199,14 @@ object Interpreter {
         case set => Meta(f(command, set).run(manConfig))
       }
     }
-    val lastArg = input.lastOption
 
-    lastArg.
-    flatMap(x => manConfig.help.symbol.find(_ == x)).
-    map(_ => show(Man.help)).
-    orElse(lastArg.flatMap(x => manConfig.suggest.symbol.find(_ == x))).
-    map(_ => show(Man.suggest)).
-    getOrElse(Transform(success(input)))
+    (for {
+      arg <- input.lastOption
+      help = manConfig.help.symbol.find(_ == arg).map(_ => show(Man.help))
+      suggest = manConfig.suggest.symbol.find(_ == arg).map(_ => show(Man.suggest))
+      command <- help orElse suggest
+    } yield command).
+      getOrElse(Transform(success(input)))
   }
 
   /** Zips a command line input with all command shapes that matches that input in size.
