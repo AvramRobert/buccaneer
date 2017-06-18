@@ -13,7 +13,7 @@ a signature and a function block.
 Let's start off by writing a simple command that adds two numbers together:
 
 ```scala
-import buccaneer.core.DSL._
+import buccaneer.core.everything._
 import buccaneer.core.Implicits._
 
 val add = command("add")
@@ -32,8 +32,6 @@ to one of the provided command interpreters and give it the list of arguments ne
 to call it:
 
 ```scala
-import buccaneer.core.Interpreter
-
 val input = List("add", "1", "2")
 
 Interpreter.
@@ -85,11 +83,6 @@ So how does one define a complete command line interface?
 Well, the commands you've defined are simply aggregated in the following fashion:
 
 ```scala
-import buccaneer.core.DSL._
-import buccaneer.core.Implicits._
-import buccaneer.core.Cli
-import buccaneer.core.Interpreter
-
 val add = command("add")
 val subtract = command("subtract")
 val int = argument[Int]

@@ -7,8 +7,7 @@ import scala.collection.generic.CanBuildFrom
 import scala.language.implicitConversions
 import scalaz.syntax.applicative._
 
-object Implicits {
-
+trait ReadImplicits {
   implicit val readUnit: Read[Unit] = Read("Nothing") { input =>
     if (input.isEmpty) success(())
     else failure("")
@@ -63,3 +62,5 @@ object Implicits {
       }
     }
 }
+
+object Implicits extends ReadImplicits

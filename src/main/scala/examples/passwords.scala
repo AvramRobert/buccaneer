@@ -1,15 +1,11 @@
 package examples
 
-import core.DSL._
-import core.Cli
-import core.Interpreter._
+import core.everything._
 import core.Implicits._
 import scala.util.Random.{nextInt, nextLong, setSeed, shuffle}
 import scala.collection.immutable.Stream.continually
 
 object passwords {
-
-
   val help = option("-h", "--help").msg("Prints this page")
   val suggest = option("-s", "--suggest").msg("Prints a suggestion list")
   val empty = argument[Unit].msg("No parameters. Runs the command with default params.")
@@ -86,12 +82,9 @@ object passwords {
       toList
   }
 
-  implicit class ArgsOps(s: String) {
-    def args: List[String] = s.split(" ").toList
-  }
-
   def main(args: Array[String]): Unit = {
-      interpretH(passwords, config).
+      Interpreter.
+        interpretH(passwords, config).
         run(args.toList).
         foreach(_ foreach println)
   }

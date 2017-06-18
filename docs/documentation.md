@@ -21,7 +21,7 @@ Let's assume that you want to write a naive command line application that is to
 simulate a calculator. Naturally, the first thing you might want to support is the four
 basic operations: addition, subtraction, multiplication and division. So let's encode them:
 ```scala
-import buccaneer.core.DSL._
+import buccaneer.core.everything._
 import buccaneer.core.Implicits._
 
 val add = command("add")
@@ -64,7 +64,6 @@ Commands are built using only 4 primitives:
     
 Additionally, arguments and assignments may accept conditionals, that further check the input value:
 ```scala
-
 val posInt = argument[Int]((i: Int) => i > 0)
 val posAssign = assignment[Int]((i: Int) => i > 0)("a=")
 ```
@@ -197,8 +196,6 @@ Otherwise, the inconsistencies and errors are accumulated and returned as a fail
 *buccaneer* comes with a number of interpreters that do all of this and
 more. Let's take the previously defined calculator commands and run some of them:
 ```scala
-import buccaneer.core.Interpreter
-
 val goodInput = List("add", "1", "2")
 val badInput = List("multiply", "false", "false")
 
@@ -241,8 +238,6 @@ Now that we have commands and know how to run them, it is time to define a compl
 A command line interface in *buccaneer* is just an aggregation of all the individual commands
 you've defined so far: 
 ```scala
-import buccaneer.core.Cli
-
 val interface: Cli[Int] = Cli(adder, subtractor, multiplier, divider)
 ```
 This `Cli[Int]`-thing is actually just a `Map` from command signatures to the 
