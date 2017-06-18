@@ -1,6 +1,6 @@
-import core.DSL._
 import core.Implicits._
-import core.{Cli, Interpreter, Step, Validators, Denot, Label}
+import core.everything._
+import core.{Step, Validators, Denot, Label}
 
 class InterpreterSpec extends DefaultTestSuite {
 

@@ -1,7 +1,5 @@
 package core
 
-object DSL extends CommandOps with ManOps
-
 /** A command line interface abstraction.
   * A command line interface is essentially a Map
   * from command shapes to their functions.

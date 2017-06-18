@@ -1,8 +1,6 @@
 package examples
 
-import core.DSL._
-import core.Cli
-import core.Interpreter._
+import core.everything._
 import core.Implicits._
 
 object curl {
