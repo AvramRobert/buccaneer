@@ -103,8 +103,8 @@ class TreeSpec extends DefaultTestSuite {
     }
 
     "allow conversions to a string" in {
-      forAll(trees(0, 1000)) { tree =>
-        tree.string("")(_.toString) shouldBe tree.toVector.mkString("")
+      forAll(trees(0, 1000), Gen.alphaLowerStr) { (tree, s) =>
+        tree.string(s)(_.toString) shouldBe tree.toVector.mkString(s)
       }
     }
   }

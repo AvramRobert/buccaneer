@@ -68,7 +68,7 @@ Additionally, arguments and assignments may also be constrained by a conditional
 val posInt = argument[Int]((i: Int) => i > 0)
 val posA = assignment[Int]((i: Int) => i > 0)("a=")
 ```
-**Note:**: The type has to be specified here due to Scala's left-to-right flowing type inference, which cannot properly infer
+**Note:** The type has to be specified here due to Scala's left-to-right flowing type inference, which cannot properly infer
 the type of the function. 
 <br />
 <br />
@@ -82,7 +82,7 @@ val nothing = argument[Unit]
 #### Command line interfaces
 So how does one define a complete command line interface?
 
-Well, the arguments you've defined are simply aggregated in the following fashion:
+Well, the commands you've defined are simply aggregated in the following fashion:
 
 ```scala
 import buccaneer.core.DSL._

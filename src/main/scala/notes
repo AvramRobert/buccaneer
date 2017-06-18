@@ -9,8 +9,8 @@
  > 4. When no input provided, the interpolation throws an exception.
       In this case, I should provide a standard empty input and let it work with that.
 
-5. When interpreting no input as an empty string, collections also pick up on it and
-thus try to parse it to an empty collection. => ambiguity
+ > 5. When interpreting no input as an empty string, collections also pick up on it and
+   thus try to parse it to an empty collection. => ambiguity
 
 == TO DO ==
  > 0. HelpConfig should contain the name of the program and use it when no title is found. Also add it to usage.

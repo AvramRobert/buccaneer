@@ -7,6 +7,7 @@ import scalaz.syntax.applicative._
 
 object Tree {
   def apply[A](a: A): Tree[A] = Node(a)
+
   def empty[A]: Tree[A] = Leaf
 
   lazy implicit val traverse: Traverse[Tree] = new Traverse[Tree] {
@@ -19,6 +20,7 @@ object Tree {
 }
 
 /** A binary tree, that is allowed to grow only in either a leftist or rightist fashion.
+  *
   * @tparam A tree value type
   */
 sealed trait Tree[+A] {
@@ -227,14 +229,16 @@ sealed trait Tree[+A] {
     * it creates a string that contains each value of the tree separated by the given
     * separator.
     *
-    * @param sep a separator for the tree's values
+    * @param sep  a separator for the tree's values
     * @param show function that converts the tree's values to `String`
     * @return string containing each value of the tree separated by the given separator
     */
   def string(sep: String)(show: A => String): String = {
-    val xs = foldLeft("")((x, y) => x + show(y) + sep)
-    if(sep.isEmpty) xs
-    else xs.dropRight(1)
+    val seps = Stream.continually(sep).take(depth - 1).toList
+    zips(seps).foldLeft("") {
+      case (full, (a, Some(s))) => full + show(a) + s
+      case (full, (a, _)) => full + show(a)
+    }
   }
 
   private final def affixP[X](ths: Tree[X], tht: Tree[X]): Tree[X] = ths match {
@@ -256,8 +260,9 @@ sealed trait Tree[+A] {
 }
 
 /** A binary tree node, containing a value, a left and right branch.
+  *
   * @param value the value at the given node
-  * @param left left subtree
+  * @param left  left subtree
   * @param right right subtree
   * @tparam A tree value type
   */

@@ -95,10 +95,9 @@ In general, functions with no arguments are essentially functions from `Unit => 
 ```scala
 val nothing = argument[Unit]
 
-val cli = Cli(
-(nothing) { () => println("I hope you've not expected much.") }  
-...
-)
+val withoutInput = (nothing) { () => 
+  println("I hope you've not expected much.") 
+}    
 ```
 
 And that's it. All you have to do is simply mix these primitives together to create
@@ -133,9 +132,11 @@ order to avoid ambiguity. <br />
     * Example: _2d_, _155.1230923829d_, _1.0d_ ..
 * **Arbitrary collections**
     * comma-separated values
+    * empty collections are ignored
     * Example: _2,3,4,5,6,7,8_ or _true,true,true,false,true_ ..
 * **Maps** 
     * comma-separated assignments using "=" 
+    * empty maps are ignored
     * Example: _a=4,b=5,c=7_ or _robert=true,carrie=false,lisa=false_ ..
 * **Files** 
     * string paths
@@ -185,6 +186,7 @@ implicit val readFraction: Read[Fraction] = read("Fraction") { (input: String) =
   }
 }
 ```
+
 ### Running commands
 Commands are run by _interpreting_ a command line input relative to a command signature. 
 The input is taken and matched against that signature. If the input
@@ -276,6 +278,48 @@ provided input, it does not know a priori what exact description will match. As 
 complete interfaces, it cannot aggregate errors and output them. If it were to do so, 
 then it would return the errors of *all* command signatures it tried to match against but failed. 
 Instead, in case of failure, it simply says that a command has not been found. 
+
+##### `Read[A]` ambiguities
+A `Read[A]` ambiguity may occur when two or more `Read[A]` instances are 
+capable of reading the same string input. In general, this is something that *buccaneer* 
+actively avoids through the type system and additional syntactic measures. 
+There is however one particular, very specific case where, due to its choice of supporting 
+(almost) full generality when reading strings, such ambiguities may occur.
+This is namely the case when a CLI can read both single values of type `A`, 
+and one-element collections of type `A`. 
+<br />
+For example: 
+```scala
+val argInt = argument[Int]
+val listInt = argument[List[Int]]
+
+argInt("1") // success
+listInt("1") // success
+```
+When reading a single `Int` string, both the `argInt` and `listInt` will happily 
+consume that input. `argInt` will convert it to a single integer, whilst 
+`listInt` will convert it to a list of one integer. The same goes for one-element maps and
+assignments using `=`: 
+```scala
+val assignInt = assignment[Int]("a=")
+val mapInt = argument[Map[String, Int]]
+
+assignInt("a=5") // success
+mapInt("a=5") // success
+``` 
+Should a command line application contain such cases: 
+```scala
+val cli = Cli (
+(negate - argInt)(_ * -1),
+(negate - listInt)(_ map(_ * -1)))
+
+Interpreter.
+  intrepret(cli).
+  run(List("5")). // ambigous 
+  print
+```
+Then the result of interpreting such an input will lead to ambiguity and thus an error.
+The error will explicitly state which conversions came into conflict. 
 <br />
 <br />
 And that's it. You can now create arbitrarily large and complex command
