@@ -5,6 +5,14 @@ More descriptive information can be found here:
  * [Docs](docs/documentation.md) - for a full description of its capabilities
  * [Examples](src/main/scala/examples) - for concrete usage examples
 
+
+##### SBT
+```scala
+resolvers += Resolver.bintrayRepo("robertavram","maven")
+
+libraryDependencies += "com.polymorph" %% "buccaneer" % "0.1.0"
+```
+
 #### For the impatient
 The general idea in *buccaneer* is that you define commands very similarly to
 how functions are defined in typed programming languages. They are associations between 

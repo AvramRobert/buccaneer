@@ -1,10 +1,8 @@
+name := "buccaneer"
 
-val projectName = "buccaneer"
-val localRepo = s"${Path.userHome.absolutePath}/Releases/$projectName"
+organization := "com.polymorph"
 
-name := projectName
-
-version := "0.1.0-SNAPSHOT"
+version := "0.1.0"
 
 scalaVersion := "2.11.8"
 
@@ -23,4 +21,4 @@ libraryDependencies ++= Seq(
   "org.scalatest" % "scalatest_2.11" % "3.0.0",
   "org.scalacheck" % "scalacheck_2.11" % "1.13.4")
 
-publishTo := Some(Resolver.file(s"${name.key.label}_$version", new File(localRepo)))
+licenses += ("Apache-2.0", url("https://opensource.org/licenses/Apache-2.0"))
