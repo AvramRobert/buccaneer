@@ -1,4 +1,4 @@
-import core.{Formatter, ManConfig}
+import buccaneer.{Formatter, ManConfig}
 
 class FormatterSpec extends DefaultTestSuite {
 

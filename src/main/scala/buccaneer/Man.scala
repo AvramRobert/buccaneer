@@ -1,4 +1,4 @@
-package core
+package buccaneer
 
 import Formatter.Formatter
 import scalaz.syntax.traverse._
@@ -307,13 +307,13 @@ object Man {
 
 object Formatter {
 
-  private[core]
+  private[buccaneer]
   sealed trait Cardinality
 
-  private[core]
+  private[buccaneer]
   case object All extends Cardinality
 
-  private[core]
+  private[buccaneer]
   case class Few(n: Int) extends Cardinality
 
   type Format[A] = Vector[A] => Vector[A]
@@ -332,7 +332,7 @@ object Formatter {
   /** An ADT for describing text formatting in a combinator-like fashion.
     * Formatting is defined in terms of what needs to happen at each line.
     */
-  private[core]
+  private[buccaneer]
   sealed trait Formatter {
     protected def data: Vector[Char]
 
@@ -655,7 +655,7 @@ object Formatter {
     * @param f     the formatting that should occur at every line
     * @param width the width of each line for the given `data`
     */
-  private[core]
+  private[buccaneer]
   case class Every(data: Vector[Char], f: Format[Char], width: Int) extends Formatter
 
   /** Indicates a formatting that needs to happen at specific lines in some text.
@@ -666,7 +666,7 @@ object Formatter {
     * @param at    line at which formatting should start
     * @param n     amount of lines for which formatting should be applied
     */
-  private[core]
+  private[buccaneer]
   case class More(data: Vector[Char], f: Format[Char], width: Int, at: Int, n: Cardinality) extends Formatter
 
 }

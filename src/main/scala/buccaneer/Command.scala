@@ -1,8 +1,8 @@
-package core
+package buccaneer
 
-import core.Denot.{id, typedId, typing}
-import core.Read.Result
-import core.Read._
+import buccaneer.Denot.{id, typedId, typing}
+import buccaneer.Read.Result
+import buccaneer.Read._
 import scalaz.{Apply, IndexedState, State}
 import CmdBld._
 
@@ -81,7 +81,7 @@ trait CommandOps {
 /** A builder DSL for commands, that concretely encodes function arity up to 12 types.
   * The arity stops at 12, because the `apply`-function in scalaz' `Applicative`  only goes up to 12.
   */
-private[core]
+private[buccaneer]
 object CmdBld {
   type Typer[A] = IndexedState[List[String], List[String], Result[A]]
 
@@ -99,7 +99,7 @@ object CmdBld {
   }
 }
 
-private[core]
+private[buccaneer]
 sealed trait CmdBld[+A] {
   protected def coerce[B](f: String => Result[B]): Typer[B] = coerce(Read("")(f))
 
@@ -130,12 +130,12 @@ sealed trait CmdBld[+A] {
   }
 }
 
-private[core]
+private[buccaneer]
 class Cmd[+A](val syntax: Tree[Denot], program: Typer[A]) extends CmdBld[A] {
   def run(args: List[String]): Result[A] = program.run(args)._2
 }
 
-private[core]
+private[buccaneer]
 class Cmd0(syntax0: Tree[Denot]) extends CmdBld[Nothing] {
   def -(id: Identifier): Cmd0 = makeId[({type f[x] = Cmd0})#f, Nothing](id) { syntax => new Cmd0(syntax0 affix syntax) }
 

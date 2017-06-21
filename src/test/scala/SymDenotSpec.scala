@@ -1,5 +1,5 @@
-import core.Implicits._
-import core.{Denot, Label, Sym}
+import buccaneer.Implicits._
+import buccaneer.{Denot, Label, Sym}
 
 import scala.util.Random
 

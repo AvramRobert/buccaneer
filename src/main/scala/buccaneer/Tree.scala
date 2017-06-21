@@ -1,6 +1,6 @@
-package core
+package buccaneer
 
-import core.Read.Result
+import buccaneer.Read.Result
 import scala.annotation.tailrec
 import scalaz.{Applicative, Equal, Traverse}
 import scalaz.syntax.applicative._

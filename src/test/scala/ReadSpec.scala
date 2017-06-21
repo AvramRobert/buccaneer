@@ -1,8 +1,8 @@
 import java.io.File
 
-import core.Implicits._
+import buccaneer.Implicits._
 
-import core.Read.readWhen
+import buccaneer.Read.readWhen
 import scalaz.Success
 
 class ReadSpec extends DefaultTestSuite {

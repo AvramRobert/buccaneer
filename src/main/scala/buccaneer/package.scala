@@ -1,7 +1,7 @@
-import core.Read.Result
+import buccaneer.Read.Result
 import scalaz.{Applicative, Apply, Bind, Traverse}
 
-package object core {
+package object buccaneer {
 
   implicit lazy val traverseVector: Traverse[Vector] = new Traverse[Vector] {
     override def traverseImpl[G[_], A, B](fa: Vector[A])(f: (A) => G[B])(implicit ap: Applicative[G]): G[Vector[B]] = {

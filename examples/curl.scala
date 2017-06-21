@@ -1,7 +1,7 @@
 package examples
 
-import core.everything._
-import core.Implicits._
+import buccaneer.everything._
+import buccaneer.Implicits._
 
 object curl {
   // TODO: Implement a minimalistic version of curl

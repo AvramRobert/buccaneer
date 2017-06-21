@@ -1,14 +1,14 @@
-package core
+package buccaneer
 
-import core.Man.Section
-import core.Read.Result
-import core.Cli.Cli
-import core.Read._
+import buccaneer.Man.Section
+import buccaneer.Read.Result
+import buccaneer.Cli.Cli
+import buccaneer.Read._
 
 import scalaz.syntax.applicative._
 import scalaz.syntax.validation._
 import scalaz.{Failure, Kleisli}
-import core.Validators._
+import buccaneer.Validators._
 
 /** A GADT for modelling the different types of steps in the interpreter.
   *

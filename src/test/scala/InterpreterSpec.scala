@@ -1,6 +1,6 @@
-import core.Implicits._
-import core.everything._
-import core.{Step, Validators, Denot, Label}
+import buccaneer.Implicits._
+import buccaneer.everything._
+import buccaneer.{Step, Validators, Denot, Label}
 
 class InterpreterSpec extends DefaultTestSuite {
 

@@ -1,4 +1,4 @@
-package core
+package buccaneer
 
 /** An ADT for representing symbols in a command line syntax
   */

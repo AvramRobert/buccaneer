@@ -477,7 +477,7 @@ Interpreter.
 }
 ```
 
-For concrete examples, take a look at the [examples](../src/main/scala/examples) package.
+For concrete examples, take a look at the [examples](../examples) package.
 ### Macros (sort-of)
 The command interpreter is _very_ similar to how a programming language compiler is built.
 It is a composition of a series of phases, that take the result of the previous phase, validate

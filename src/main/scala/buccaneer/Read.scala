@@ -1,6 +1,6 @@
-package core
+package buccaneer
 
-import core.Read.Result
+import buccaneer.Read.Result
 
 import scala.util.control.NonFatal
 import scalaz.{NonEmptyList, ValidationNel}

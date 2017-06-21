@@ -1,4 +1,4 @@
-import core.{Leaf, Node, Tree}
+import buccaneer.{Leaf, Node, Tree}
 import org.scalacheck.Gen
 import scala.util.Random
 import scalaz.std.option._

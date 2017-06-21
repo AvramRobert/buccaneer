@@ -1,8 +1,8 @@
-package core
+package buccaneer
 
 import java.io.File
 
-import core.Read._
+import buccaneer.Read._
 import scala.collection.generic.CanBuildFrom
 import scala.language.implicitConversions
 import scalaz.syntax.applicative._

@@ -3,7 +3,7 @@ buccaneer
 A (sort-of) library for writing command line applications quickly and effortlessly. <br />
 More descriptive information can be found here:
  * [Docs](docs/documentation.md) - for a full description of its capabilities
- * [Examples](src/main/scala/examples) - for concrete usage examples
+ * [Examples](examples) - for concrete usage examples
 
 
 ##### SBT
@@ -191,4 +191,4 @@ def main(args: Array[String]): Unit = {
   runPrintH(args.toList)
 }
 ```
-For a bit more insight, I advise taking a look at either the [docs](docs/documentation.md) or [examples](src/main/scala/examples). (or both)
+For a bit more insight, I advise taking a look at either the [docs](docs/documentation.md) or [examples](examples). (or both)

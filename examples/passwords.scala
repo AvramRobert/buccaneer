@@ -1,7 +1,7 @@
 package examples
 
-import core.everything._
-import core.Implicits._
+import buccaneer.everything._
+import buccaneer.Implicits._
 import scala.util.Random.{nextInt, nextLong, setSeed, shuffle}
 import scala.collection.immutable.Stream.continually
 
