@@ -21,8 +21,8 @@ a signature and a function block.
 Let's start off by writing a simple command that adds two numbers together:
 
 ```scala
-import buccaneer.core.everything._
-import buccaneer.core.Implicits._
+import buccaneer.everything._
+import buccaneer.Implicits._
 
 val add = command("add")
 val int = argument[Int]

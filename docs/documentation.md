@@ -21,8 +21,8 @@ Let's assume that you want to write a naive command line application that is to
 simulate a calculator. Naturally, the first thing you might want to support is the four
 basic operations: addition, subtraction, multiplication and division. So let's encode them:
 ```scala
-import buccaneer.core.everything._
-import buccaneer.core.Implicits._
+import buccaneer.everything._
+import buccaneer.Implicits._
 
 val add = command("add")
 val subtract = command("subtract")
@@ -107,7 +107,7 @@ When declaring a type argument or type assignment,
 a `Read[A]` instance for that particular type is implicitly required. The `Read[A]` instance 
 defines how a string should be converted to that
 particular type. Additionally it also specifies a string representation for `A`. 
-The `bucanneer.core.Implicits` package already contains `Read[A]` instances 
+The `buccaneer.Implicits` package already contains `Read[A]` instances 
 for a number of types. Please note, that some of them have some minor syntactic requirements in
 order to avoid ambiguity. <br />
 * **Unit**
@@ -147,7 +147,7 @@ You can however also define your own instances. <br />
 of their type `A`, this has to also be specified with its definition.
 
 ```scala
-import bucanneer.core.Read._
+import buccaneer.Read._
 
 case class Fraction(num: Int, denom: Int)
 
@@ -166,7 +166,7 @@ accumulate all the errors when converting from  `String => A`.
 For example:
 
 ```scala
-import bucanneer.core.Read._
+import buccaneer.Read._
 import scalaz.syntax.validation._
 
 case class Fraction(num: Int, denom: Int)
