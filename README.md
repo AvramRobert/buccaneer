@@ -10,7 +10,7 @@ More descriptive information can be found here:
 ```scala
 resolvers += Resolver.bintrayRepo("robertavram","maven")
 
-libraryDependencies += "com.polymorph" %% "buccaneer" % "0.1.0"
+libraryDependencies += "com.polymorph" %% "buccaneer" % "0.1.1"
 ```
 
 #### For the impatient
