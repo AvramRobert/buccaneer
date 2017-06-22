@@ -167,17 +167,15 @@ For example:
 
 ```scala
 import buccaneer.Read._
+import buccaneer.Implicits.readInt
 import scalaz.syntax.validation._
 
 case class Fraction(num: Int, denom: Int)
 
-// unsafeCoerce is a wrapper around try { } catch { }
-def intable(input: String): Result[Int] = unsafeCoerce(input)(_.toInt)
-  
 implicit val readFraction: Read[Fraction] = read("Fraction") { (input: String) => 
   if (input.contains("/") && input.split("/").length == 2) {
     val split = input.split("/")
-    (intable(split(0)) |@| intable(split(1))) {
+    (readInt(split(0)) |@| readInt(split(1))) {
       (num, denom) => Fraction(num, denom)
     }
   } else {
