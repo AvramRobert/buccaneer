@@ -1,6 +1,6 @@
 buccaneer
 =
-A (sort-of) library for writing command line applications quickly and effortlessly. <br />
+A pseudo-library library for writing command line applications quickly and effortlessly. <br />
 More descriptive information can be found here:
  * [Docs](docs/documentation.md) - for a full description of its capabilities
  * [Examples](examples) - for concrete usage examples

@@ -1,5 +1,5 @@
 ### Introduction
-*buccaneer* is a (rather opinionated) (sort-of) library for writing command line applications in a
+*buccaneer* is a (rather opinionated) pseudo-library for writing command line applications in a
 very declarative way. Its main goal is to take care of all the boilerplate associated with argument parsing,
 error handling, command execution etc. and let the user only concern himself with actually writing the
 command line interface. In addition, it provides some other interesting features, that come for free.
@@ -8,7 +8,7 @@ command line interface. In addition, it provides some other interesting features
 The basic idea in *buccaneer* is that commands are defined very similarly to how
 functions are defined in typed programming languages. They are _associations_ between 
 a signature and a function block. The signature defines the function's name and 
-domain (i.e. its _shape_), whilst the function block defines its co-domain (i.e. what it should return when invoked).
+domain, whilst the function block (and return) defines its co-domain.
 <br />
 <br />
 This is essentially the main concept that pervades this entire library. You define a command
