@@ -472,7 +472,7 @@ val manconf = manpage(
 
 def print(input: List[String]) = {
 Interpreter.
-    interpretH(interface, manconf).
+    interpretHS(interface, manconf).
     run(input).
     print
 }

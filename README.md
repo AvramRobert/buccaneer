@@ -129,17 +129,17 @@ input suggestions. These can be triggered at any point throughout the invocation
 must always either end with `-help | --help` (for MAN pages) or `-sgst  | --sgst` (for suggestions). 
 (*Note*: These keywords are configurable): 
 ```scala
-def runPrintH(input: List[String]) = {
+def runPrint(input: List[String]) = {
   Interpreter.
   interpretHS(interface).
   run(input).
   print
 }
 
-runPrintH(List("subtract", "--help"))
-runPrintH(List("subtract", "1", "--help"))
-runPrintH(List("subtract", "--sgst"))
-runPrintH(List("subtract", "1", "--sgst"))
+runPrint(List("subtract", "--help"))
+runPrint(List("subtract", "1", "--help"))
+runPrint(List("subtract", "--sgst"))
+runPrint(List("subtract", "1", "--sgst"))
 ```
 
 What do they print? 
@@ -188,7 +188,7 @@ to an application for example, just pass the `args` your application receives to
 ```scala
 def main(args: Array[String]): Unit = {
   ...
-  runPrintH(args.toList)
+  runPrint(args.toList)
 }
 ```
 For a bit more insight, I advise taking a look at either the [docs](docs/documentation.md) or [examples](examples). (or both)
