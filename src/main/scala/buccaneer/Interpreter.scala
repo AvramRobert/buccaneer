@@ -1,6 +1,5 @@
 package buccaneer
 
-import buccaneer.Man.Section
 import buccaneer.Read.Result
 import buccaneer.Cli.Cli
 import buccaneer.Read._
@@ -104,6 +103,10 @@ object Interpreter {
   type AST = Tree[(Denot, String)]
   type Shape = Tree[Denot]
 
+  def phase[A, B](f: A => Step[B]): Phase[A, B] = Kleisli(f)
+
+  def transform[A, B](f: A => Result[B]): Phase[A, B] = phase(f andThen Transform.apply)
+
   /** Partially matches a command input to a set of given command shapes and
     * keeps those that match most closely. The matching occurs from left-to-right.
     *
@@ -134,10 +137,6 @@ object Interpreter {
       case set if set.isEmpty => Transform(failure("No command found matching input"))
       case set => Transform(success(set))
     }
-
-  def phase[A, B](f: A => Step[B]): Phase[A, B] = Kleisli(f)
-
-  def transform[A, B](f: A => Result[B]): Phase[A, B] = phase(f andThen Transform.apply)
 
   /** Interprets a single command.
     * In case of erroneous input, all detected errors are accumulated in a list.
@@ -214,8 +213,10 @@ object Interpreter {
   def interpretS[A](cli: Cli[A], manConfig: ManConfig = ManConfig.man()) =
     suggest(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
 
-  /** Picks-out the appropriate command a set of command shapes when
+  /** Picks out the appropriate command from a set of command shapes when
     * given a command line input.
+    *
+    * Returns a failed interpretation if no command found.
     *
     * @param all set of command shapes
     * @return an interpretation step

@@ -22,3 +22,5 @@ libraryDependencies ++= Seq(
   "org.scalacheck" % "scalacheck_2.11" % "1.13.4")
 
 licenses += ("Apache-2.0", url("https://opensource.org/licenses/Apache-2.0"))
+
+unmanagedSourceDirectories in Compile += baseDirectory.value / "examples"

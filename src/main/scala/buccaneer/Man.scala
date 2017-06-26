@@ -8,7 +8,7 @@ import ManConfig._
 
 trait ManOps {
 
-  /** Convenience DSL function for creating creating ManConfig
+  /** Convenience DSL function for creating ManConfig
     *
     * @param programName        command line application name
     * @param programDescription a description of the application
