@@ -84,7 +84,7 @@ object passwords {
 
   def main(args: Array[String]): Unit = {
       Interpreter.
-        interpretH(passwords, config).
+        interpretHS(passwords, config).
         run(args.toList).
         foreach(_ foreach println)
   }

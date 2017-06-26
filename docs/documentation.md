@@ -342,11 +342,14 @@ builds this feature in:
 ```scala
 def runPrint(input: List[String]) = {
 Interpreter.
-  interpretH(interface).
+  interpretHS(interface).
   run(input).
   print
 }
 ```
+`interpretHS` is the interpreter that supports both features. There are also interpreters that 
+support each feature individually, namely `interpretH` (for MAN pages) and `interpretS` (for suggestions).
+<br />
 Now, any time a command input ends with `-help` or `--help` (you can change these), 
 the interpreter will compile a MAN page using the command
 signatures and then print it. 

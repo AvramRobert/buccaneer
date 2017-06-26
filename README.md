@@ -124,14 +124,14 @@ runPrint(List("add", "1", "2"))
 runPrint(List("subtract", "2.012321", "1.2323"))
 ```
 #### MAN pages and input suggestions
-Finally, there is one last interpreter called `interpretH`, which provides automatic MAN page generation and
+Finally, there is one last interpreter called `interpretHS`, which provides automatic MAN page generation and
 input suggestions. These can be triggered at any point throughout the invocation. To trigger them, an input 
 must always either end with `-help | --help` (for MAN pages) or `-sgst  | --sgst` (for suggestions). 
 (*Note*: These keywords are configurable): 
 ```scala
 def runPrintH(input: List[String]) = {
   Interpreter.
-  interpretH(interface).
+  interpretHS(interface).
   run(input).
   print
 }

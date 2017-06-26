@@ -122,6 +122,19 @@ object Interpreter {
         }
     }
 
+  /** Partially matches an input against a set of command shapes and
+    * automatically returns a failure if no commands partially match.
+    *
+    * @param commands command shapes to match against
+    * @param input input of command elements
+    * @return an interpretation step
+    */
+  def matching(commands: Set[Shape], input: List[String]): Step[Set[Shape]] =
+    partialMatch(commands, input) match {
+      case set if set.isEmpty => Transform(failure("No command found matching input"))
+      case set => Transform(success(set))
+    }
+
   def phase[A, B](f: A => Step[B]): Phase[A, B] = Kleisli(f)
 
   def transform[A, B](f: A => Result[B]): Phase[A, B] = phase(f andThen Transform.apply)
@@ -157,8 +170,25 @@ object Interpreter {
     * given some command line input. It additionally supports MAN page generation
     * and suggestions at any point during the invocation.
     *
-    * For man pages, any command should end in `-help` or `--help`.
-    * For suggestions, any command should end in `-sgst` or `--sgst`.
+    * By default, for man pages, any command should end in `-help` or `--help`.
+    * By default, for suggestions, any command should end in `-sgst` or `--sgst`.
+    * These options can however be changed in `ManConfig`.
+    *
+    * @param cli       the command line interface
+    * @param manConfig the configuration record for MAN pages
+    * @tparam A type of the command result
+    * @return an interpretation step
+    */
+  def interpretHS[A](cli: Cli[A], manConfig: ManConfig = ManConfig.man()) =
+    meta(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
+
+  /** Provides interpretation for an entire command line interface.
+    * When run, it automatically picks, checks and runs the appropriate command
+    * given some command line input. It additionally supports MAN page generation
+    * at any point during the invocation.
+    *
+    * By default, for man pages, any command should end in `-help` or `--help`.
+    * This option can however be changed in `ManConfig`.
     *
     * @param cli       the command line interface
     * @param manConfig the configuration record for MAN pages
@@ -166,7 +196,23 @@ object Interpreter {
     * @return an interpretation step
     */
   def interpretH[A](cli: Cli[A], manConfig: ManConfig = ManConfig.man()) =
-    meta(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
+    help(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
+
+  /** Provides interpretation for an entire command line interface.
+    * When run, it automatically picks, checks and runs the appropriate command
+    * given some command line input. It additionally supports input suggestions
+    * at any point during the invocation.
+    *
+    * By default, for suggestions, any command should end in `-sgst` or `--sgst`.
+    * This option can however be changed in `ManConfig`.
+    *
+    * @param cli       the command line interface
+    * @param manConfig the configuration record for MAN pages
+    * @tparam A type of the command result
+    * @return an interpretation step
+    */
+  def interpretS[A](cli: Cli[A], manConfig: ManConfig = ManConfig.man()) =
+    suggest(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
 
   /** Picks-out the appropriate command a set of command shapes when
     * given a command line input.
@@ -192,20 +238,48 @@ object Interpreter {
     * @return an interpretation step
     */
   def meta[A](cli: Cli[A], manConfig: ManConfig) = phase { (input: List[String]) =>
-    def show(f: (List[String], Set[Shape]) => Section[String]): Step[Nothing] = {
-      lazy val command = input.dropRight(1)
-      partialMatch(cli.keySet, command) match {
-        case set if set.isEmpty => Transform(failure("No command found matching input"))
-        case set => Meta(f(command, set).run(manConfig))
-      }
-    }
-
     (for {
       arg <- input.lastOption
-      help = manConfig.help.symbol.find(_ == arg).map(_ => show(Man.help))
-      suggest = manConfig.suggest.symbol.find(_ == arg).map(_ => show(Man.suggest))
+      help = manConfig.help.symbol.find(_ == arg).map(_ => Man.help(_, _))
+      suggest = manConfig.suggest.symbol.find(_ == arg).map(_ => Man.suggest(_, _))
       command <- help orElse suggest
-    } yield command).
+      partial = input.dropRight(1)
+    } yield matching(cli.keySet, partial).
+      flatMap(matching => Meta(command(partial, matching).run(manConfig)))).
+      getOrElse(Transform(success(input)))
+  }
+
+  /** Provides input suggestions for a command line interface.
+    *
+    * @param cli       the command line interface
+    * @param manConfig the configuration record for MAN pages
+    * @tparam A type of the command result
+    * @return an interpretation step
+    */
+  def suggest[A](cli: Cli[A], manConfig: ManConfig) = phase { (input: List[String]) =>
+    (for {
+      arg <- input.lastOption
+      _ <- manConfig.suggest.symbol.find(_ == arg)
+      command = input.dropRight(1)
+    } yield matching(cli.keySet, command).
+      flatMap(matches => Meta(Man.suggest(command, matches).run(manConfig)))).
+      getOrElse(Transform(success(input)))
+  }
+
+  /** Provides MAN page generation for a command line interface.
+    *
+    * @param cli       the command line interface
+    * @param manConfig the configuration record for MAN pages
+    * @tparam A type of the command result
+    * @return an interpretation step
+    */
+  def help[A](cli: Cli[A], manConfig: ManConfig) = phase { (input: List[String]) =>
+    (for {
+      arg <- input.lastOption
+      _ <- manConfig.help.symbol.find(_ == arg)
+      command = input.dropRight(1)
+    } yield matching(cli.keySet, command).
+      flatMap(matches => Meta(Man.help(command, matches).run(manConfig)))).
       getOrElse(Transform(success(input)))
   }
 

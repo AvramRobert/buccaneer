@@ -29,8 +29,8 @@ class InterpreterSpec extends DefaultTestSuite {
           empty { _ => f(a, b) }
         )
 
-        checkSucc(Interpreter.interpretH(cli).run(List(name, a.toString, b.toString)), f(a, b))
-        checkSucc(Interpreter.interpretH(cli).run(List()), f(a, b))
+        checkSucc(Interpreter.interpretHS(cli).run(List(name, a.toString, b.toString)), f(a, b))
+        checkSucc(Interpreter.interpretHS(cli).run(List()), f(a, b))
       }
     }
 
@@ -83,7 +83,7 @@ class InterpreterSpec extends DefaultTestSuite {
           val cmd4 = (command(string) - argument[Int] - argument[Int]) (f)
           val cmd5 = (command(string) - assignment[Int](name)) (identity)
           val cli = Cli(cmd1, cmd2, cmd3, cmd4, cmd5)
-          val interpreter = Interpreter.interpretH(cli)
+          val interpreter = Interpreter.interpretHS(cli)
 
           checkMeta(interpreter.run(List(name, "--help")))(_.nonEmpty)
           checkMeta(interpreter.run(List(name, "--sgst")))(_.nonEmpty)
@@ -95,6 +95,49 @@ class InterpreterSpec extends DefaultTestSuite {
       }
     }
 
+    "only support suggestions at any point during the invocation" in {
+      forAll { (name: String, int: Int, bool: Boolean, string: String, f: (Int, Int) => Int, g: Boolean => Boolean) =>
+        whenever(name != string) {
+          val h = (x: Boolean, y: Int, z: Int) => g(x) && f(y, z) > 0
+          val cmd1 = (command(name) - argument[Int] - argument[Int]) (f)
+          val cmd2 = (command(name) - assignment[Boolean](string)) (g)
+          val cmd3 = (command(name) - assignment[Boolean](string) - argument[Int] - argument[Int]) (h)
+          val cmd4 = (command(string) - argument[Int] - argument[Int]) (f)
+          val cmd5 = (command(string) - assignment[Int](name)) (identity)
+          val cli = Cli(cmd1, cmd2, cmd3, cmd4, cmd5)
+          val interpreter = Interpreter.interpretS(cli)
+
+          checkFail(interpreter.run(List(name, "--help")))(_.size == 1)
+          checkMeta(interpreter.run(List(name, "--sgst")))(_.nonEmpty)
+          checkFail(interpreter.run(List(name, int.toString, "--help")))(_.size == 1)
+          checkMeta(interpreter.run(List(name, int.toString, "--sgst")))(_.nonEmpty)
+          checkFail(interpreter.run(List(name, int.toString, int.toString, "--help")))(_.size == 1)
+          checkMeta(interpreter.run(List(name, int.toString, int.toString, "--sgst")))(_.nonEmpty)
+        }
+      }
+    }
+
+    "only support help at any point during the invocation" in {
+      forAll { (name: String, int: Int, bool: Boolean, string: String, f: (Int, Int) => Int, g: Boolean => Boolean) =>
+        whenever(name != string) {
+          val h = (x: Boolean, y: Int, z: Int) => g(x) && f(y, z) > 0
+          val cmd1 = (command(name) - argument[Int] - argument[Int]) (f)
+          val cmd2 = (command(name) - assignment[Boolean](string)) (g)
+          val cmd3 = (command(name) - assignment[Boolean](string) - argument[Int] - argument[Int]) (h)
+          val cmd4 = (command(string) - argument[Int] - argument[Int]) (f)
+          val cmd5 = (command(string) - assignment[Int](name)) (identity)
+          val cli = Cli(cmd1, cmd2, cmd3, cmd4, cmd5)
+          val interpreter = Interpreter.interpretH(cli)
+
+          checkMeta(interpreter.run(List(name, "--help")))(_.nonEmpty)
+          checkFail(interpreter.run(List(name, "--sgst")))(_.size == 1)
+          checkMeta(interpreter.run(List(name, int.toString, "--help")))(_.nonEmpty)
+          checkFail(interpreter.run(List(name, int.toString, "--sgst")))(_.size == 1)
+          checkMeta(interpreter.run(List(name, int.toString, int.toString, "--help")))(_.nonEmpty)
+          checkFail(interpreter.run(List(name, int.toString, int.toString, "--sgst")))(_.size == 1)
+        }
+      }
+    }
 
     "match commands partially" in {
       forAll { (name: String, int: Int, bool: Boolean, string: String, f: (Int, Int) => Int, g: Boolean => Boolean) =>
