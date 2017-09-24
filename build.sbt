@@ -17,6 +17,7 @@ scalacOptions ++= Seq(
 )
 
 libraryDependencies ++= Seq(
+  "com.chuusai" %% "shapeless" % "2.3.2",
   "org.scalaz" % "scalaz-core_2.11" % "7.2.8",
   "org.scalatest" % "scalatest_2.11" % "3.0.0",
   "org.scalacheck" % "scalacheck_2.11" % "1.13.4")

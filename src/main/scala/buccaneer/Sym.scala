@@ -11,7 +11,7 @@ sealed trait Sym {
 
   def | (label: Label): Alternative = this | label.value
 
-  final def find(p: String => Boolean): Option[Label] = this match {
+  final def find(p: String => Boolean): scala.Option[Label] = this match {
     case x@Label(value) if p(value) => Some(x)
     case Alternative(alts) => alts.find(p).map(Label)
     case _ => None
