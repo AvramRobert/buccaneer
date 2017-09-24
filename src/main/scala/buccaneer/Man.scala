@@ -21,8 +21,8 @@ trait ManOps {
     */
   def manpage(programName: String = "nameless",
           programDescription: String = "descriptionless",
-          help: Identifier = help,
-          suggest: Identifier = suggest,
+          help: Opt = help,
+          suggest: Opt = suggest,
           textWidth: Int = 150,
           indentation: Int = 5,
           columnSpacing: Int = 5): ManConfig = man(programName, programDescription, help, suggest, textWidth, indentation, columnSpacing)
@@ -30,18 +30,18 @@ trait ManOps {
 
 
 object ManConfig {
-  lazy val helpSym = Label("-help") | Label("--help")
-  lazy val helpDesc = "Prints this page"
-  lazy val suggestSym = Label("-sgst") | Label("--sgst")
-  lazy val suggestDesc = "Prints a list of input suggestions based on the current input"
+  lazy val help: Opt = Denotation.
+    option(List("-help", "--help")).
+    msg("Prints this page")
 
-  lazy val help = Denot.id(helpSym).msg(helpDesc)
-  lazy val suggest = Denot.id(suggestSym).msg(suggestDesc)
+  lazy val suggest: Opt = Denotation.
+    option(List("-suggest", "--suggest")).
+    msg("Prints a list of input suggestions based on the current input")
 
   def man(programName: String = "nameless",
           programDescription: String = "descriptionless",
-          help: Identifier = help,
-          suggest: Identifier = suggest,
+          help: Opt = help,
+          suggest: Opt = suggest,
           textWidth: Int = 150,
           indentation: Int = 5,
           columnSpacing: Int = 5): ManConfig =
@@ -60,8 +60,8 @@ object ManConfig {
   */
 case class ManConfig(programName: String,
                      programDescription: String,
-                     help: Identifier,
-                     suggest: Identifier,
+                     help: Opt,
+                     suggest: Opt,
                      textWidth: Int,
                      indentation: Int,
                      columnSpacing: Int)
@@ -122,11 +122,11 @@ object Man {
     * @param command command shape
     * @return a vector of tuples containing the element string form and its documentation
     */
-  def paired(command: Tree[Denot]): Vector[(String, String)] = {
-    @tailrec def go(cur: Tree[Denot], acc: Vector[(String, String)] = Vector()): Vector[(String, String)] = cur match {
+  def paired(command: Expr): Vector[(String, String)] = {
+    @tailrec def go(cur: Expr, acc: Vector[(String, String)] = Vector()): Vector[(String, String)] = cur match {
       case a -< (l, r) =>
         val left = l.foldLeft(a.show) { (str, denot) => s"$str ${denot.show}" }
-        go(r, acc :+ (left, a.docs))
+        go(r, acc :+ (left, a.description))
       case Leaf => acc
     }
 
@@ -139,7 +139,7 @@ object Man {
     * @param all vector of command shapes
     * @return size of the largest from `all`
     */
-  def largest(all: Vector[Tree[Denot]]): Int = all.
+  def largest(all: Vector[Expr]): Int = all.
     map {
       case a -< (l, _) => l.foldLeft(a.show.length)((x, y) => x + y.show.length) + 1
       case Leaf => 0
@@ -150,12 +150,12 @@ object Man {
     * @param tree command shape to extract infromation from
     * @return section of text that will create the formatted block of text when given a `ManConfig`
     */
-  def command(tree: Tree[Denot]): Section[Formatter] = section { config =>
+  def command(tree: Tree[Denotation[Any]]): Section[Formatter] = section { config =>
     tree.
-      takeWhile(_.isMajorIdentifier).
+      takeWhile(_.isCommand).
       toVector.
       lastOption.
-      map(denot => text(s"${denot.show} - ${denot.docs}")).
+      map(denot => text(s"${denot.show} - ${denot.description}")).
       getOrElse(text(s"${config.programName} - ${config.programDescription}")).
       ofWidth(config.textWidth).
       push(config.indentation).
@@ -168,11 +168,11 @@ object Man {
     * @param options the options of the current command
     * @return a section containing a compacted usage block in text form
     */
-  def usages(command: Tree[Denot], options: Vector[Tree[Denot]]): Section[Vector[Formatter]] = section { config =>
+  def usages(command: Expr, options: Vector[Expr]): Section[Vector[Formatter]] = section { config =>
     val internal = Vector(Tree(config.help), Tree(config.suggest))
 
     (options ++ internal).
-      filterNot(_.rootOf(_.isMajorIdentifier)).
+      filterNot(_.rootOf(_.isCommand)).
       flatMap(_.toVector).
       map(_.show).
       distinct.
@@ -195,13 +195,13 @@ object Man {
     * @param all command shapes
     * @return a section containing a vector of all subcommands in text form
     */
-  def subcommands(all: Vector[Tree[Denot]]): Section[Vector[Formatter]] = {
+  def subcommands(all: Vector[Expr]): Section[Vector[Formatter]] = {
     val max = largest(all)
-    all.filter(_.rootOf(_.isMajorIdentifier)).
+    all.filter(_.rootOf(_.isCommand)).
       map(_.rootOption).
       distinct.
       map(_.fold(emptySection) { denot =>
-        columned(denot.show, denot.docs, max)
+        columned(denot.show, denot.description, max)
       }).
       sequenceU
   }
@@ -211,11 +211,11 @@ object Man {
     * @param all command shapes
     * @return a section containing a vector of all options in text form
     */
-  def options(all: Vector[Tree[Denot]]): Section[Vector[Formatter]] = section { config =>
+  def options(all: Vector[Expr]): Section[Vector[Formatter]] = section { config =>
     val max = largest(all)
     val internal = Vector(Tree(config.help), Tree(config.suggest))
     (all ++ internal).
-      filterNot(_.rootOf(_.isMajorIdentifier)).
+      filterNot(_.rootOf(_.isCommand)).
       flatMap(paired).
       distinct.
       map(t => columned(t._1, t._2, max)).
@@ -258,7 +258,7 @@ object Man {
     * @param corresponding shapes of commands corresponding to input
     * @return section of text that returns the MAN page when given a `ManConfig`
     */
-  def help(input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = for {
+  def help(input: List[String], corresponding: Set[Expr]): Section[String] = for {
     suggestion <- section(_.suggest)
     matched <- section(_ => corresponding.toVector.map(_ zips input))
     first = matched.map(_.takeWhile(_._2.isDefined).map(_._1))
@@ -291,13 +291,13 @@ object Man {
     * @param corresponding shape of commands corresponding to input
     * @return a section of text that returns the box of suggestions given a `ManConfig`
     */
-  def suggest(input: List[String], corresponding: Set[Tree[Denot]]): Section[String] = section { config =>
+  def suggest(input: List[String], corresponding: Set[Expr]): Section[String] = section { config =>
     makeText {
       corresponding.
         map { tree =>
           text(tree.string(" ") {
-            case id@Identifier(Alternative(alts), _, _) if alts.size > 1 => s"[${id.show}]"
-            case tid@TypedIdentifier(Alternative(alts), _, _) if alts.size > 1 => s"[${tid.show}]"
+            case opt@Opt(labels, _) if labels.size > 1 => s"[${opt.show}]"
+            case assign@Assgn(labels, _, _, _) if labels.size > 1 => s"[${assign.show}]"
             case denot => denot.show
           })
         }

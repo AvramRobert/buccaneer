@@ -1,9 +1,6 @@
 package buccaneer
 
-import buccaneer.Read.Result
 import buccaneer.Cli.Cli
-import buccaneer.Read._
-
 import scalaz.syntax.applicative._
 import scalaz.syntax.validation._
 import scalaz.{Failure, Kleisli}
@@ -100,39 +97,38 @@ case class Meta(info: String) extends Step[Nothing]
 
 object Interpreter {
   type Phase[A, B] = Kleisli[Step, A, B]
-  type AST = Tree[(Denot, String)]
-  type Shape = Tree[Denot]
 
   def phase[A, B](f: A => Step[B]): Phase[A, B] = Kleisli(f)
 
   def transform[A, B](f: A => Result[B]): Phase[A, B] = phase(f andThen Transform.apply)
 
-  /** Partially matches a command input to a set of given command shapes and
+  /** Partially matches a command input to a set of given command Exprs and
     * keeps those that match most closely. The matching occurs from left-to-right.
     *
-    * @param commands shapes of commands to match against
+    * @param commands Exprs of commands to match against
     * @param input    input of command elements
-    * @return set of command shapes that partially match the input
+    * @return set of command Exprs that partially match the input
     */
-  def partialMatch(commands: Set[Shape], input: List[String]): Set[Shape] =
+  def partialMatch(commands: Set[Expr], input: Args): Set[Expr] =
     if (input.isEmpty) commands
     else commands.filter {
       _.zipWithList(input).
         forall {
-          case (Identifier(sym, _, _), value) => sym.exists(_ startsWith value)
-          case (TypedIdentifier(sym, _, _), value) => sym.exists(x => (x startsWith value) || (value startsWith x))
-          case (Typing(p, _), value) => p(value).isSuccess
+          case (Com(label, _), value) => label startsWith value
+          case (Opt(labels, _), value) => labels exists (_ startsWith value)
+          case (Arg(read, _), value) => read(value).isSuccess
+          case (Assgn(labels, op, _, _), value) => labels exists (s => (s + op) startsWith value)
         }
     }
 
-  /** Partially matches an input against a set of command shapes and
+  /** Partially matches an input against a set of command Exprs and
     * automatically returns a failure if no commands partially match.
     *
-    * @param commands command shapes to match against
+    * @param commands command Exprs to match against
     * @param input input of command elements
     * @return an interpretation step
     */
-  def matching(commands: Set[Shape], input: List[String]): Step[Set[Shape]] =
+  def matching(commands: Set[Expr], input: Args): Step[Set[Expr]] =
     partialMatch(commands, input) match {
       case set if set.isEmpty => Transform(failure("No command found matching input"))
       case set => Transform(success(set))
@@ -145,13 +141,14 @@ object Interpreter {
     * @tparam A type of command result
     * @return an interpretation step
     */
-  def interpret[A](cmd: Cmd[A]) =
-    interpolate(Set(cmd.syntax)) andThen
+  def interpret[A](cmd: Command[A]) =
+    interpolate(Set(cmd.expr)) andThen
       pick andThen
       transform { (ast: AST) =>
         (ast.validate(syntax) |@| ast.validate(types)) ((_, t) => t)
       } andThen
       run(cmd)
+
 
   /** Provides interpretation for an entire command line interface.
     * When run, it automatically picks, checks and runs the appropriate command
@@ -213,20 +210,16 @@ object Interpreter {
   def interpretS[A](cli: Cli[A], manConfig: ManConfig = ManConfig.man()) =
     suggest(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
 
-  /** Picks out the appropriate command from a set of command shapes when
+  /** Picks out the appropriate command from a set of command Exprs when
     * given a command line input.
     *
     * Returns a failed interpretation if no command found.
     *
-    * @param all set of command shapes
+    * @param all set of command Exprs
     * @return an interpretation step
     */
-  def resolve(all: Set[Shape]) =
-    interpolate(all) andThen
-      filter(_.rootOf[(Denot, String)] {
-        case (Identifier(Label(value), _, _), input) => input == value
-        case _ => true
-      }) andThen
+  def resolve(all: Set[Expr]) =
+      interpolate(all) andThen
       validate(syntax) andThen
       validate(types) andThen
       pick
@@ -241,8 +234,8 @@ object Interpreter {
   def meta[A](cli: Cli[A], manConfig: ManConfig) = phase { (input: List[String]) =>
     (for {
       arg <- input.lastOption
-      help = manConfig.help.symbol.find(_ == arg).map(_ => Man.help(_, _))
-      suggest = manConfig.suggest.symbol.find(_ == arg).map(_ => Man.suggest(_, _))
+      help = manConfig.help.labels.find(_ == arg).map(_ => Man.help(_, _))
+      suggest = manConfig.suggest.labels.find(_ == arg).map(_ => Man.suggest(_, _))
       command <- help orElse suggest
       partial = input.dropRight(1)
     } yield matching(cli.keySet, partial).
@@ -260,7 +253,7 @@ object Interpreter {
   def suggest[A](cli: Cli[A], manConfig: ManConfig) = phase { (input: List[String]) =>
     (for {
       arg <- input.lastOption
-      _ <- manConfig.suggest.symbol.find(_ == arg)
+      _ <- manConfig.suggest.labels.find(_ == arg)
       command = input.dropRight(1)
     } yield matching(cli.keySet, command).
       flatMap(matches => Meta(Man.suggest(command, matches).run(manConfig)))).
@@ -277,19 +270,19 @@ object Interpreter {
   def help[A](cli: Cli[A], manConfig: ManConfig) = phase { (input: List[String]) =>
     (for {
       arg <- input.lastOption
-      _ <- manConfig.help.symbol.find(_ == arg)
+      _ <- manConfig.help.labels.find(_ == arg)
       command = input.dropRight(1)
     } yield matching(cli.keySet, command).
       flatMap(matches => Meta(Man.help(command, matches).run(manConfig)))).
       getOrElse(Transform(success(input)))
   }
 
-  /** Zips a command line input with all command shapes that matches that input in size.
+  /** Zips a command line input with all command Exprs that matches that input in size.
     *
-    * @param commands command shapes
+    * @param commands command Exprs
     * @return an interpretation step
     */
-  def interpolate(commands: Set[Shape]) = transform { (input: List[String]) =>
+  def interpolate(commands: Set[Expr]) = transform { (input: List[String]) =>
     val args = if (input.isEmpty) List("") else input
     commands.
       filter(_.depth == args.size).
@@ -298,7 +291,7 @@ object Interpreter {
       successNel
   }
 
-  /** Keeps interpolated command line shapes that satisfy the given predicate.
+  /** Keeps interpolated command line Exprs that satisfy the given predicate.
     *
     * @param f predicate stating the condition of preservation
     * @return an interpretation step
@@ -308,24 +301,24 @@ object Interpreter {
   }
 
   /** Applies a validation function on a list of interpolated command
-    * line shapes. Essentially used to validate the concrete input against
+    * line Exprs. Essentially used to validate the concrete input against
     * the expectation with which it has been zipped.
     *
     * @param f validation function
     * @return an interpretation step
     */
-  def validate(f: ((Denot, String)) => Result[(Denot, String)]) = transform { (commands: List[AST]) =>
+  def validate(f: ((Denotation[Any], String)) => Result[(Denotation[Any], String)]) = transform { (commands: List[AST]) =>
     val point = success(List.empty[AST])
     commands.map(_ validate f)
       .filter(_.isSuccess)
       .foldRight(point)((a, b) => (a |@| b) (_ :: _))
   }
 
-  /** Picks the final command shape from a list of possible shapes.
+  /** Picks the final command Expr from a list of possible Exprs.
     * It is considered to be last step in the command resolution process.
-    * If, after command resolution, the list of possible shapes contains
+    * If, after command resolution, the list of possible Exprs contains
     * more than one command, then the input is ambiguous. If it however contains none,
-    * then no command shape has been found that exactly matches that input.
+    * then no command Expr has been found that exactly matches that input.
     *
     * @return an interpretation step
     */
@@ -343,7 +336,7 @@ object Interpreter {
     }
   }
 
-  /** Runs the function associated with a command shape from a command
+  /** Runs the function associated with a command Expr from a command
     * line interface.
     *
     * @param cli command line interface
@@ -359,16 +352,17 @@ object Interpreter {
 
   /** Runs the function of a single command.
     *
-    * @param cmd command to run
+    * @param command command to run
     * @tparam A type of command result
     * @return an interpretation step
     */
-  def run[A](cmd: Cmd[A]): Phase[AST, A] = transform { (ast: AST) =>
+  def run[A](command: Command[A]): Phase[AST, A] = transform { (ast: AST) =>
     val args = ast.filter(_._1.isTyped).map(_._2)
-    cmd.run(args)
+    command.fn.run(args)
   }
 }
 
+// TODO: Define a validation typeclass and abstract over this shit
 object Validators {
 
   /** Function for validating the syntax of an input against its expectation.
@@ -376,12 +370,14 @@ object Validators {
     * @param assoc association between expectation and concrete input
     * @return result of validation
     */
-  def syntax(assoc: (Denot, String)) = (assoc match {
-    case (Identifier(symbol, _, _), input) => symbol.find(_ == input)
-    case (TypedIdentifier(symbol, _, _), input) => symbol.find(v => input startsWith v)
-    case _ => Some(Label(""))
+  def syntax(assoc: (Denotation[Any], String)) = (assoc match {
+    case (Com(label, _), input) if label == input => Some(assoc)
+    case (Opt(labels, _), input) if labels.contains(input) => Some(assoc)
+    case (Assgn(labels, op, _, _), input) if labels.exists(v => input startsWith v + op) => Some(assoc)
+    case (Arg(_, _), _) => Some(assoc)
+    case _ => None
   }).fold {
-    failure[(Denot, String)](s"Input of `${assoc._2}` does not match the expected input of ${assoc._1.show}")
+    failure[(Denotation[Any], String)](s"Input of `${assoc._2}` does not match the expected input of ${assoc._1.show}")
   } { _ => success(assoc) }
 
   /** Function for validation the type of an input against its expectation.
@@ -389,9 +385,9 @@ object Validators {
     * @param assoc association between expectation and concrete input
     * @return result of validation
     */
-  def types(assoc: (Denot, String)) = assoc match {
-    case (Typing(proof, _), input) => proof(input).map(_ => assoc)
-    case (TypedIdentifier(_, proof, _), input) => proof(input).map(_ => assoc)
+  def types(assoc: (Denotation[Any], String)) = assoc match {
+    case (Arg(read, _), input) => read(input).map(_ => assoc)
+    case (Assgn(_, op, read, _), input) => read(input.split(op)(1)).map(_ => assoc)
     case _ => success(assoc)
   }
 }
