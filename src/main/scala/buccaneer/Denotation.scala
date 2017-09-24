@@ -1,13 +1,5 @@
 package buccaneer
 
-object Denotation {
-  def prove[A: Read]: Read[A] = implicitly[Read[A]]
-  def command(label: String): Com = Com(label, "")
-  def option(labels: List[String]): Opt = Opt(labels, "")
-  def argument[A: Read]: Arg[A] = Arg(prove[A], "")
-  def assignment[A: Read](labels: List[String], op: String): Assgn[A] = Assgn(labels, op, prove[A], "")
-}
-
 sealed trait Denotation[+A] {
   val description: String
   def msg(desc: String): Denotation[A]

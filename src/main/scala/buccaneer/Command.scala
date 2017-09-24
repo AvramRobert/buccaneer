@@ -7,41 +7,48 @@ import buccaneer.Read.readWhen
 import scalaz.Reader
 
 trait CommandOps {
-  implicit def commandOps(c: Com): CommandBuilder[HNil, HNil, HNil, Unit] = emptyBuilder
-  implicit def optionOps(o: Opt): CommandBuilder[HNil, HNil, HNil, Unit] = emptyBuilder
+  implicit def commandOps(command: Com): CommandBuilder[HNil, HNil, HNil, Unit] = emptyBuilder - command
+  implicit def optionOps(option: Opt): CommandBuilder[HNil, HNil, HNil, Unit] = emptyBuilder - option
   implicit def argumentOps[A](argument: Arg[A]): CommandBuilder[Read[A] :: HNil, A :: HNil, A :: HNil, Tuple1[A]] = emptyBuilder - argument
   implicit def assignmentOps[A](assignment: Assgn[A]): CommandBuilder[Read[A] :: HNil, A :: HNil, A :: HNil, Tuple1[A]] = emptyBuilder - assignment
 
-  /**
-    * Picks a `Read` instance from implicit scope and
+
+  /** Plucks a `Read[A]` instance out of implicit scope
+    * and returns it
+    * @tparam A type of `Read`
+    * @return `Read[A]` instance
+    */
+  def prove[A: Read]: Read[A] = implicitly[Read[A]]
+
+  /** Picks a `Read` instance from implicit scope and
     * transforms it into a constrained `Read`
     *
     * @param p predicate constraint on the future value
     * @tparam A type of `Read`
     * @return constrained `Read` instance
     */
-  def proveWhen[A: Read](p: A => Boolean): Read[A] = readWhen(Denotation.prove)(p)
+  def proveWhen[A: Read](p: A => Boolean): Read[A] = readWhen(prove)(p)
 
   /** Creates a command identifier.
     *
     * @param label command name as symbol
     * @return identifier denotation
     */
-  def command(label: String): Com = Denotation.command(label)
+  def command(label: String): Com = Com(label, "")
 
   /** Creates an option identifier.
     *
     * @param labels a sequence of possible options
     * @return identifier denotation
     */
-  def option(labels: String*): Opt = Denotation.option(labels.toList)
+  def option(labels: String*): Opt = Opt(labels.toList, "")
 
   /** Creates a type argument.
     *
     * @tparam A desired type
     * @return typing denotation
     */
-  def argument[A: Read]: Arg[A] = Denotation.argument[A]
+  def argument[A: Read]: Arg[A] = Arg(prove[A], "")
 
   /**
     * Creates a constrained type argument.
@@ -51,7 +58,7 @@ trait CommandOps {
 
     * @return typing denotation
     */
-  def argument[A: Read](p: (A) => Boolean): Arg[A] = Denotation.argument[A](proveWhen(p))
+  def argument[A: Read](p: (A) => Boolean): Arg[A] = Arg(proveWhen(p), "")
 
   /** Creates an association between an identifier and a type.
     *
@@ -59,7 +66,7 @@ trait CommandOps {
     * @tparam A desired type
     * @return typed identifier denotation
     */
-  def assignment[A: Read](labels: String*)(op: String): Assgn[A] = Denotation.assignment[A](labels.toList, op)
+  def assignment[A: Read](labels: String*)(op: String): Assgn[A] = Assgn(labels.toList, op, prove[A], "")
 
   /**
     * Creates a constrained association between an identifier and a type.
@@ -69,7 +76,7 @@ trait CommandOps {
     * @tparam A desired type
     * @return typed identifier denotation
     */
-  def assignment[A: Read](p: A => Boolean)(labels: String*)(op: String): Assgn[A] = Denotation.assignment[A](labels.toList, op)(proveWhen(p))
+  def assignment[A: Read](p: A => Boolean)(labels: String*)(op: String): Assgn[A] = Assgn(labels.toList, op, proveWhen(p), "")
 }
 
 private[buccaneer]
