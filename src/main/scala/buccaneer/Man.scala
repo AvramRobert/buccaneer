@@ -30,13 +30,8 @@ trait ManOps {
 
 
 object ManConfig {
-  lazy val help: Opt = Denotation.
-    option(List("-help", "--help")).
-    msg("Prints this page")
-
-  lazy val suggest: Opt = Denotation.
-    option(List("-suggest", "--suggest")).
-    msg("Prints a list of input suggestions based on the current input")
+  lazy val help: Opt = Opt(List("-help", "--help"), "Prints this page")
+  lazy val suggest: Opt = Opt(List("-suggest", "--suggest"), "Prints a list of input suggestions based on the current input")
 
   def man(programName: String = "nameless",
           programDescription: String = "descriptionless",
