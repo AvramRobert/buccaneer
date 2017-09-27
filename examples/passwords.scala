@@ -6,6 +6,9 @@ import scala.util.Random.{nextInt, nextLong, setSeed, shuffle}
 import scala.collection.immutable.Stream.continually
 
 object passwords {
+  val program = command("passwords").msg("Dummy password generator")
+  val gen = command("gen").msg("Generate a new password")
+  val minusS = option("--s").msg("Recursive")
   val help = option("-h", "--help").msg("Prints this page")
   val suggest = option("-s", "--suggest").msg("Prints a suggestion list")
   val empty = argument[Unit].msg("No parameters. Runs the command with default params.")
@@ -16,8 +19,7 @@ object passwords {
   val version = option("-v", "--version").msg("Outputs the current version")
 
   val config = manpage(
-    programName = "passwords",
-    programDescription = "Dummy password generator",
+    program = program,
     help = help,
     suggest = suggest)
 
@@ -41,7 +43,9 @@ object passwords {
     exclusion.apply { ex => generate(dictionary = exclude(ex._1)) },
     seed.apply { seed => generate(seed = seed._1) },
     max.apply { max => generate(minLength = pickMin(max._1), maxLength = max._1) },
-    min.apply{ min => generate(minLength = min._1, maxLength = pickMax(min._1)) },
+    min.apply { min => generate(minLength = min._1, maxLength = pickMax(min._1)) },
+    (gen - min - max).apply { case (min, max) => generate(minLength = min, maxLength = max) },
+    (gen - minusS - seed). apply { s => generate(seed = s._1) },
     (min - max).apply { case (min, max) =>  generate(minLength = min, maxLength = max) },
     (max - seed). apply { case (max, seed) => generate(minLength = pickMin(max), maxLength = max, seed = seed) },
     (min - seed).apply { case (min, seed) => generate(minLength = min, maxLength = pickMax(min), seed = seed) },
@@ -84,7 +88,7 @@ object passwords {
 
   def main(args: Array[String]): Unit = {
       Interpreter.
-        interpretHS(passwords, config).
+        interpretH(passwords, config).
         run(args.toList).
         foreach(_ foreach println)
   }

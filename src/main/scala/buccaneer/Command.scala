@@ -4,7 +4,7 @@ import shapeless._
 import ops.hlist._
 import CommandBuilder._
 import buccaneer.Read.readWhen
-import scalaz.Reader
+import RoseList._
 
 trait CommandOps {
   implicit def commandOps(command: Com): CommandBuilder[HNil, HNil, HNil, Unit] = emptyBuilder - command
@@ -66,7 +66,11 @@ trait CommandOps {
     * @tparam A desired type
     * @return typed identifier denotation
     */
-  def assignment[A: Read](labels: String*)(op: String): Assgn[A] = Assgn(labels.toList, op, prove[A], "")
+  def assignment[A: Read](labels: String*)(op: String): Assgn[A] = {
+    val proof = prove[A]
+    val read = Read(proof.show)(s => proof(s.split(op)(1)))
+    Assgn(labels.toList, op, read, "")
+  }
 
   /**
     * Creates a constrained association between an identifier and a type.
@@ -76,7 +80,11 @@ trait CommandOps {
     * @tparam A desired type
     * @return typed identifier denotation
     */
-  def assignment[A: Read](p: A => Boolean)(labels: String*)(op: String): Assgn[A] = Assgn(labels.toList, op, proveWhen(p), "")
+  def assignment[A: Read](p: A => Boolean)(labels: String*)(op: String): Assgn[A] = {
+    val proof = prove[A]
+    val read = Read(proof.show)(s => proof(s.split(op)(1)))
+    Assgn(labels.toList, op, readWhen(read)(p), "")
+  }
 }
 
 private[buccaneer]
@@ -91,14 +99,15 @@ object consume extends Poly2 {
 object CommandBuilder {
   val emptyBuilder: CommandBuilder[HNil, HNil, HNil, Unit] =
     CommandBuilder(
-      Tree.empty[Denotation[Any]],
+      empty[Denotation[Any]],
       HNil,
       Reverse.reverse[HNil, HNil],
       Tupler.hnilTupler,
       LeftFolder.hnilLeftFolder[(Args, HNil), consume.type])
 }
 
-case class CommandBuilder[K <: HList, H <: HList, R <: HList, T](tree: Tree[Denotation[Any]],
+// FIXME: Think about doing a CommandBuilder1 to avoid scala not having syntax for tuple1
+case class CommandBuilder[K <: HList, H <: HList, R <: HList, T](expr: RoseList[Denotation[Any]],
                                                                  types: K,
                                                                  reverse: Reverse.Aux[H, R],
                                                                  tupler: Tupler.Aux[R, T],
@@ -110,7 +119,7 @@ case class CommandBuilder[K <: HList, H <: HList, R <: HList, T](tree: Tree[Deno
                           t: Tupler.Aux[O, B],
                           f: LeftFolder.Aux[Read[A] :: K, (Args, HNil), consume.type, (Args, O)])
   : CommandBuilder[Read[A] :: K, A :: H, O, B]
-  = CommandBuilder(tree infix argument, argument.read :: types, r, t, f)
+  = CommandBuilder(expr prepend argument, argument.read :: types, r, t, f)
 
   def -[A, B, O <: HList](assignment: Assgn[A])
                          (implicit
@@ -118,14 +127,13 @@ case class CommandBuilder[K <: HList, H <: HList, R <: HList, T](tree: Tree[Deno
                           t: Tupler.Aux[O, B],
                           f: LeftFolder.Aux[Read[A] :: K, (Args, HNil), consume.type, (Args, O)])
   : CommandBuilder[Read[A] :: K, A :: H, O, B]
-  = CommandBuilder(tree infix assignment, assignment.read :: types, r, t, f)
+  = CommandBuilder(expr prepend assignment, assignment.read :: types, r, t, f)
 
-  def -(option: Opt): CommandBuilder[K, H, R, T] = CommandBuilder(tree infix option, types, reverse, tupler, folder)
-  def -(command: Com): CommandBuilder[K, H, R, T] = CommandBuilder(tree affix command, types, reverse, tupler, folder)
+  def -(option: Opt): CommandBuilder[K, H, R, T] = CommandBuilder(expr prepend option, types, reverse, tupler, folder)
+  def -(command: Com): CommandBuilder[K, H, R, T] = CommandBuilder(expr prepend command, types, reverse, tupler, folder)
 
-  def apply[B](f: T => B): Command[B] = Command(tree, Reader { args =>
-    attempt(f(tupler(folder(types, (args.reverse, HNil))._2)))
-  })
+  def apply[B](f: T => B): Command[B] = Command(expr, args =>
+    attempt(f(tupler(folder(types, (args.reverse, HNil))._2))))
 }
 
-case class Command[A](expr: Tree[Denotation[Any]], fn: Reader[Args, Result[A]])
+case class Command[+A](expr: RoseList[Denotation[Any]], fn: Args => Result[A])

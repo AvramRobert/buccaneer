@@ -4,8 +4,9 @@ import scalaz.syntax.validation._
 
 package object buccaneer {
   type Args = List[String]
-  type Expr = Tree[Denotation[Any]]
-  type AST = Tree[(Denotation[Any], String)]
+  type Expr[A] = Vector[Denotation[A]]
+  type AST[A] = Vector[(Denotation[A], String)]
+  type SAST[A] = Vector[(Denotation[A], Option[String])]
   type Result[A] = ValidationNel[Throwable, A]
 
   def success[A](a: A): Result[A] = a.successNel[Throwable]

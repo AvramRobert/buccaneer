@@ -14,12 +14,19 @@ sealed trait Denotation[+A] {
     case _ => false
   }
 
+  def isOption: Boolean = this match {
+    case Opt(_, _) => true
+    case _ => false
+  }
+
   def show: String = this match {
     case Com(label, _) => label
     case Opt(labels, _) => labels.mkString("|")
     case Arg(read, _) => s"<${read.show}>"
     case Assgn(labels, op, read, _) => labels.map(s => s"$s$op<${read.show}>").mkString("|")
   }
+
+  override def toString: String = show
 }
 case class Com(label: String, description: String) extends Denotation[Nothing] {
   def msg(desc: String): Com = Com(label, desc)

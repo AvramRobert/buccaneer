@@ -1,6 +1,7 @@
 package buccaneer
 
 import Formatter.Formatter
+
 import scalaz.syntax.traverse._
 import scala.annotation.tailrec
 import scalaz.Reader
@@ -10,8 +11,7 @@ trait ManOps {
 
   /** Convenience DSL function for creating ManConfig
     *
-    * @param programName        command line application name
-    * @param programDescription a description of the application
+    * @param program            the application itself as a command
     * @param help               the identifier to call when printing the help MAN page
     * @param suggest            the identifier to call when printing the list of input suggestions
     * @param textWidth          desired text width per block of text
@@ -19,42 +19,39 @@ trait ManOps {
     * @param columnSpacing      desired spacing between columns of text
     * @return a `ManConfig` case class containing all the provided values
     */
-  def manpage(programName: String = "nameless",
-          programDescription: String = "descriptionless",
-          help: Opt = help,
-          suggest: Opt = suggest,
-          textWidth: Int = 150,
-          indentation: Int = 5,
-          columnSpacing: Int = 5): ManConfig = man(programName, programDescription, help, suggest, textWidth, indentation, columnSpacing)
+  def manpage(program: Com = com,
+              help: Opt = help,
+              suggest: Opt = suggest,
+              textWidth: Int = 150,
+              indentation: Int = 5,
+              columnSpacing: Int = 5): ManConfig = man(com, help, suggest, textWidth, indentation, columnSpacing)
 }
 
 
 object ManConfig {
+  lazy val com: Com = Com("nameless", "descriptionless")
   lazy val help: Opt = Opt(List("-help", "--help"), "Prints this page")
   lazy val suggest: Opt = Opt(List("-suggest", "--suggest"), "Prints a list of input suggestions based on the current input")
 
-  def man(programName: String = "nameless",
-          programDescription: String = "descriptionless",
+  def man(program: Com = com,
           help: Opt = help,
           suggest: Opt = suggest,
           textWidth: Int = 150,
           indentation: Int = 5,
           columnSpacing: Int = 5): ManConfig =
-    ManConfig(programName, programDescription, help, suggest, textWidth, indentation, columnSpacing)
+    ManConfig(program, help, suggest, textWidth, indentation, columnSpacing)
 }
 
 /** A record containing various parameters for configuring the aesthetic of a MAN page.
   *
-  * @param programName        command line application name
-  * @param programDescription a description of the application
+  * @param program            CLI name as a command
   * @param help               the identifier to call when printing the help MAN page
   * @param suggest            the identifier to call when printing the list of input suggestions
   * @param textWidth          desired text width per block of text
   * @param indentation        desired indentation per line
   * @param columnSpacing      desired spacing between columns of text
   */
-case class ManConfig(programName: String,
-                     programDescription: String,
+case class ManConfig(program: Com,
                      help: Opt,
                      suggest: Opt,
                      textWidth: Int,
@@ -103,7 +100,7 @@ object Man {
     *
     * @param left    text block on the left
     * @param right   text block on the right
-    * @param largest size of the largest text block (if there are any
+    * @param largest size of the largest text block (if many are columned, used as a reference)
     * @return a section of text that formats the block when given a `ManConfig`
     */
   def columned(left: String, right: String, largest: Int): Section[Formatter] = for {
@@ -117,16 +114,7 @@ object Man {
     * @param command command shape
     * @return a vector of tuples containing the element string form and its documentation
     */
-  def paired(command: Expr): Vector[(String, String)] = {
-    @tailrec def go(cur: Expr, acc: Vector[(String, String)] = Vector()): Vector[(String, String)] = cur match {
-      case a -< (l, r) =>
-        val left = l.foldLeft(a.show) { (str, denot) => s"$str ${denot.show}" }
-        go(r, acc :+ (left, a.description))
-      case Leaf => acc
-    }
-
-    go(command)
-  }
+  def paired(command: SAST[Any]): Vector[(String, String)] = command.map { d => (d._1.show, d._1.description) }
 
   /** Given a number of command shapes, returns the size of the command
     * whose string representation is largest.
@@ -134,104 +122,89 @@ object Man {
     * @param all vector of command shapes
     * @return size of the largest from `all`
     */
-  def largest(all: Vector[Expr]): Int = all.
-    map {
-      case a -< (l, _) => l.foldLeft(a.show.length)((x, y) => x + y.show.length) + 1
-      case Leaf => 0
-    }.max
+  def largest(all: Set[SAST[Any]]): Int = {
+    if(all.isEmpty) 0
+    else all.map(_.map(_._1).mkString("").length).max
+  }
+
+  def pairedSection(f: ManConfig => Set[SAST[Any]]): Section[Vector[Formatter]] = section { config =>
+    val items = f(config)
+    val max = largest(items)
+    val empty = Vector[(String, String)]()
+    items.map(paired).
+      foldLeft(empty)(_ ++ _).
+      distinct.
+      map {
+        case (left, right) => columned(left, right, max)
+      }.
+      sequenceU
+  }.flatMap(identity)
 
   /** Creates the command section of a MAN page.
     *
-    * @param tree command shape to extract infromation from
+    * @param all input-relative command shapes to extract information from
     * @return section of text that will create the formatted block of text when given a `ManConfig`
     */
-  def command(tree: Tree[Denotation[Any]]): Section[Formatter] = section { config =>
-    tree.
-      takeWhile(_.isCommand).
-      toVector.
-      lastOption.
-      map(denot => text(s"${denot.show} - ${denot.description}")).
-      getOrElse(text(s"${config.programName} - ${config.programDescription}")).
-      ofWidth(config.textWidth).
-      push(config.indentation).
-      every
-  }
-
-  /** Creates the usage section of a MAN page.
-    *
-    * @param command current command
-    * @param options the options of the current command
-    * @return a section containing a compacted usage block in text form
-    */
-  def usages(command: Expr, options: Vector[Expr]): Section[Vector[Formatter]] = section { config =>
-    val internal = Vector(Tree(config.help), Tree(config.suggest))
-
-    (options ++ internal).
-      filterNot(_.rootOf(_.isCommand)).
-      flatMap(_.toVector).
-      map(_.show).
-      distinct.
-      map(str => s"[$str]").
-      grouped(3).
-      map(v => text(v.mkString(" ")).widen(_ + 1)).
-      reduceOption(_ interlace _).
-      map { usages =>
-        text(s"${config.programName} ${command.toVector.map(_.show).mkString(" ")}").
-          push(config.indentation).
-          widen(_ + config.indentation).
-          align(usages, 1)
+  def command(all: Set[SAST[Any]]): Section[Vector[Formatter]] = pairedSection { config =>
+    lazy val program = (config.program, Some(""))
+    all.headOption.
+      flatMap(_.takeWhile(x => x._1.isCommand && x._2.isDefined).lastOption).
+      map {
+        case (c@Com(_, _), i) => (c, i)
+        case _ => program
       }.
-      map(Vector(_)).
-      getOrElse(missing)
+      orElse(Some(program)).
+      map(Vector[(Denotation[Any], Option[String])](_)).
+      toSet
   }
 
   /** Creates the subcommand section of a MAN page.
     *
-    * @param all command shapes
+    * @param all command shapes relative to input
     * @return a section containing a vector of all subcommands in text form
     */
-  def subcommands(all: Vector[Expr]): Section[Vector[Formatter]] = {
-    val max = largest(all)
-    all.filter(_.rootOf(_.isCommand)).
-      map(_.rootOption).
-      distinct.
-      map(_.fold(emptySection) { denot =>
-        columned(denot.show, denot.description, max)
-      }).
-      sequenceU
+  def subcommands(all: Set[SAST[Any]]): Section[Vector[Formatter]] = pairedSection { _ =>
+    all.map { sast =>
+      sast.
+        dropWhile(x => x._1.isCommand && x._2.isDefined).
+        filter(_._1.isCommand)
+    }
   }
 
   /** Creates the option section of a MAN page.
     *
-    * @param all command shapes
+    * @param all input-relative command shapes
     * @return a section containing a vector of all options in text form
     */
-  def options(all: Vector[Expr]): Section[Vector[Formatter]] = section { config =>
-    val max = largest(all)
-    val internal = Vector(Tree(config.help), Tree(config.suggest))
-    (all ++ internal).
-      filterNot(_.rootOf(_.isCommand)).
-      flatMap(paired).
-      distinct.
-      map(t => columned(t._1, t._2, max)).
-      sequenceU
-  }.flatMap(identity)
+  def options(all: Set[SAST[Any]]): Section[Vector[Formatter]] = pairedSection { _ =>
+    all.map(_.dropWhile(_._2.isDefined)).
+      filterNot(_.headOption exists (_._1.isCommand)).
+      map(_.filter(_._1.isOption))
+  }
+
+  /** Creates the usages section of a MAN page
+    *
+    * @param all command shapes to extract information from
+    * @return section of text that will create the formatted block of text when given a `ManConfig`
+    */
+  def usages(all: Set[SAST[Any]]): Section[Vector[Formatter]] = section { config =>
+    all.map(_.dropWhile(_._2.isDefined)).
+      filterNot(_.headOption exists (_._1.isCommand)).
+      flatMap(_.filterNot(_._1.isCommand)).
+      map(x => s"[${x._1.show}]").
+      grouped(3).
+      toVector.
+      map(x => Formatter(x.mkString("|")).widen(_ + config.indentation).push(config.indentation))
+  }
 
   /** Creates a complete text from a collection of formatters.
     *
     * @param formatters formatters with formatted text
     * @return a string containing all formatted texts
     */
-  def makeText(formatters: TraversableOnce[Formatter]): String = {
+  def makeText(formatters: Vector[Formatter]): String = {
     formatters.foldLeft(Vector.empty[Char]) { (acc, frmt) => acc ++ frmt.runH }.mkString("")
   }
-
-  /** Extracts the formatted text from a formatter.
-    *
-    * @param f formatter with formatted text
-    * @return text of `f`
-    */
-  def makeText(f: Formatter): String = makeText(List(f))
 
   /** `getOrElse`-like function for empty collections of formatters.
     * Lifts `txt` into a formatter when `v` is empty and returns that.
@@ -249,55 +222,28 @@ object Man {
   /** Creates a complete MAN page relative to some concrete command
     * line input and the command shapes that match that input.
     *
-    * @param input         input from command line
-    * @param corresponding shapes of commands corresponding to input
     * @return section of text that returns the MAN page when given a `ManConfig`
     */
-  def help(input: List[String], corresponding: Set[Expr]): Section[String] = for {
-    suggestion <- section(_.suggest)
-    matched <- section(_ => corresponding.toVector.map(_ zips input))
-    first = matched.map(_.takeWhile(_._2.isDefined).map(_._1))
-    rest = matched.map(_.dropWhile(_._2.isDefined).map(_._1))
-    commandSection <- first.headOption.fold(emptySection)(command)
-    usagesSection <- first.headOption.fold(emptySection.map(_ => missing))(usages(_, rest))
-    optionsSection <- options(rest)
-    subcommandSection <- subcommands(rest)
+  def help(input: Set[SAST[Any]]): Section[String] = for {
+    commandSection <- command(input)
+    optionsSection <- options(input)
+    usagesSection <- usages(input)
+    subcommandSection <- subcommands(input)
     linebreak = Formatter.empty
   } yield makeText {
-    (text("NAME") +:
-      commandSection +:
-      linebreak +:
-      text("USAGE") +:
-      whenEmpty(usagesSection)("There are no usages available.")) ++
-      (linebreak +:
-      text("OPTIONS") +:
-      whenEmpty(optionsSection)("There are no options available.")) ++
-      (linebreak +:
-        text("SUB-COMMANDS") +:
-        whenEmpty(subcommandSection)("There are no sub-commands available.") :+
-        linebreak :+
-        text(s"Hint: You can invoke ${suggestion.show} at any point to receive a list of all possible commands that match your current input."))
+    (text("NAME") +: commandSection :+ linebreak) ++
+    (text("USAGE") +: whenEmpty(usagesSection)("There are no usages available.") :+ linebreak) ++
+    (text("OPTIONS") +: whenEmpty(optionsSection)("There are no options available.") :+ linebreak) ++
+    (text("SUB-COMMANDS") +: whenEmpty(subcommandSection)("There are no sub-commands available.") :+ linebreak)
   }
 
   /** Creates suggestions relative to some concrete command line input
     * and the shape of commands corresponding to that input.
     *
-    * @param input         input from command line
-    * @param corresponding shape of commands corresponding to input
+    * @param local shape of commands corresponding to input
     * @return a section of text that returns the box of suggestions given a `ManConfig`
     */
-  def suggest(input: List[String], corresponding: Set[Expr]): Section[String] = section { config =>
-    makeText {
-      corresponding.
-        map { tree =>
-          text(tree.string(" ") {
-            case opt@Opt(labels, _) if labels.size > 1 => s"[${opt.show}]"
-            case assign@Assgn(labels, _, _, _) if labels.size > 1 => s"[${assign.show}]"
-            case denot => denot.show
-          })
-        }
-    }
-  }
+  def suggest(local: Set[SAST[Any]]): Section[String] = section { config => ??? }
 }
 
 object Formatter {
@@ -454,8 +400,8 @@ object Formatter {
       */
     def fill(n: Int): Formatter = concat(emptyN(n))
 
-    //This is essentially the place where monads would come in handy
-    //In this scenario, if i do not pre-evaluate the thing, it will repeat the total formatting function, as
+    // This is essentially the place where monads would come in handy
+    // In this scenario, if i do not pre-evaluate the thing, it will repeat the total formatting function, as
     // it is not limited to only the last operation. So if i do something like formatter.prepend('c').fill(1).repeat(3) ;
     // it is going to both prepend 'c' and fill once 3 times on all lines.
     // The point of a monad in this case would be to isolate the context and allow for things to compose

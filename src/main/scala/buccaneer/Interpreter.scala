@@ -1,7 +1,6 @@
 package buccaneer
 
 import buccaneer.Cli.Cli
-import scalaz.syntax.applicative._
 import scalaz.syntax.validation._
 import scalaz.{Failure, Kleisli}
 import buccaneer.Validators._
@@ -59,7 +58,7 @@ sealed trait Step[+A] {
   def print: Unit = fold(println)(errs => formatErrors(errs) foreach println)(println)
 
   /** Applies a side-effecting function on the success value of an
-    * iterpretation. Automatically prints errors and
+    * interpretation. Automatically prints errors and
     * meta information with a predefined format.
     *
     * @param f side-effecting function
@@ -109,10 +108,10 @@ object Interpreter {
     * @param input    input of command elements
     * @return set of command Exprs that partially match the input
     */
-  def partialMatch(commands: Set[Expr], input: Args): Set[Expr] =
+  def partialMatch(commands: Set[Expr[Any]], input: Args): Set[Expr[Any]] =
     if (input.isEmpty) commands
     else commands.filter {
-      _.zipWithList(input).
+      _.zip(input).
         forall {
           case (Com(label, _), value) => label startsWith value
           case (Opt(labels, _), value) => labels exists (_ startsWith value)
@@ -128,7 +127,7 @@ object Interpreter {
     * @param input input of command elements
     * @return an interpretation step
     */
-  def matching(commands: Set[Expr], input: Args): Step[Set[Expr]] =
+  def matching(commands: Set[Expr[Any]], input: Args): Step[Set[Expr[Any]]] =
     partialMatch(commands, input) match {
       case set if set.isEmpty => Transform(failure("No command found matching input"))
       case set => Transform(success(set))
@@ -137,17 +136,11 @@ object Interpreter {
   /** Interprets a single command.
     * In case of erroneous input, all detected errors are accumulated in a list.
     *
-    * @param cmd command to interpret
+    * @param command to interpret
     * @tparam A type of command result
     * @return an interpretation step
     */
-  def interpret[A](cmd: Command[A]) =
-    interpolate(Set(cmd.expr)) andThen
-      pick andThen
-      transform { (ast: AST) =>
-        (ast.validate(syntax) |@| ast.validate(types)) ((_, t) => t)
-      } andThen
-      run(cmd)
+  def interpret[A](command: Command[A]) = resolve(command.expr.unbundle) andThen run(command)
 
 
   /** Provides interpretation for an entire command line interface.
@@ -175,54 +168,8 @@ object Interpreter {
     * @tparam A type of the command result
     * @return an interpretation step
     */
-  def interpretHS[A](cli: Cli[A], manConfig: ManConfig = ManConfig.man()) =
-    meta(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
-
-  /** Provides interpretation for an entire command line interface.
-    * When run, it automatically picks, checks and runs the appropriate command
-    * given some command line input. It additionally supports MAN page generation
-    * at any point during the invocation.
-    *
-    * By default, for man pages, any command should end in `-help` or `--help`.
-    * This option can however be changed in `ManConfig`.
-    *
-    * @param cli       the command line interface
-    * @param manConfig the configuration record for MAN pages
-    * @tparam A type of the command result
-    * @return an interpretation step
-    */
   def interpretH[A](cli: Cli[A], manConfig: ManConfig = ManConfig.man()) =
-    help(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
-
-  /** Provides interpretation for an entire command line interface.
-    * When run, it automatically picks, checks and runs the appropriate command
-    * given some command line input. It additionally supports input suggestions
-    * at any point during the invocation.
-    *
-    * By default, for suggestions, any command should end in `-sgst` or `--sgst`.
-    * This option can however be changed in `ManConfig`.
-    *
-    * @param cli       the command line interface
-    * @param manConfig the configuration record for MAN pages
-    * @tparam A type of the command result
-    * @return an interpretation step
-    */
-  def interpretS[A](cli: Cli[A], manConfig: ManConfig = ManConfig.man()) =
-    suggest(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
-
-  /** Picks out the appropriate command from a set of command Exprs when
-    * given a command line input.
-    *
-    * Returns a failed interpretation if no command found.
-    *
-    * @param all set of command Exprs
-    * @return an interpretation step
-    */
-  def resolve(all: Set[Expr]) =
-      interpolate(all) andThen
-      validate(syntax) andThen
-      validate(types) andThen
-      pick
+    meta(cli, manConfig) andThen resolve(cli.keySet) andThen runFrom(cli)
 
   /** Provides MAN page generation and suggestions for a command line interface.
     *
@@ -234,84 +181,51 @@ object Interpreter {
   def meta[A](cli: Cli[A], manConfig: ManConfig) = phase { (input: List[String]) =>
     (for {
       arg <- input.lastOption
-      help = manConfig.help.labels.find(_ == arg).map(_ => Man.help(_, _))
-      suggest = manConfig.suggest.labels.find(_ == arg).map(_ => Man.suggest(_, _))
-      command <- help orElse suggest
-      partial = input.dropRight(1)
-    } yield matching(cli.keySet, partial).
-      flatMap(matching => Meta(command(partial, matching).run(manConfig)))).
+      help = manConfig.help.labels.find(_ == arg).map(_ => Man.help(_))
+      suggest = manConfig.suggest.labels.find(_ == arg).map(_ => Man.suggest(_))
+      helpOrSuggest <- help orElse suggest
+      command = input.dropRight(1)
+    } yield matching(cli.keySet, command).flatMap { matching =>
+      Meta(helpOrSuggest(matching.map(x => traverseVector.zipL(x, command.toVector))).run(manConfig))
+    }).
       getOrElse(Transform(success(input)))
   }
-
-  /** Provides input suggestions for a command line interface.
+  /** Picks out the appropriate command from a set of command Exprs when
+    * given a command line input.
     *
-    * @param cli       the command line interface
-    * @param manConfig the configuration record for MAN pages
-    * @tparam A type of the command result
+    * Returns a failed interpretation if no command found.
+    *
+    * @param all set of command Exprs
     * @return an interpretation step
     */
-  def suggest[A](cli: Cli[A], manConfig: ManConfig) = phase { (input: List[String]) =>
-    (for {
-      arg <- input.lastOption
-      _ <- manConfig.suggest.labels.find(_ == arg)
-      command = input.dropRight(1)
-    } yield matching(cli.keySet, command).
-      flatMap(matches => Meta(Man.suggest(command, matches).run(manConfig)))).
-      getOrElse(Transform(success(input)))
-  }
-
-  /** Provides MAN page generation for a command line interface.
-    *
-    * @param cli       the command line interface
-    * @param manConfig the configuration record for MAN pages
-    * @tparam A type of the command result
-    * @return an interpretation step
-    */
-  def help[A](cli: Cli[A], manConfig: ManConfig) = phase { (input: List[String]) =>
-    (for {
-      arg <- input.lastOption
-      _ <- manConfig.help.labels.find(_ == arg)
-      command = input.dropRight(1)
-    } yield matching(cli.keySet, command).
-      flatMap(matches => Meta(Man.help(command, matches).run(manConfig)))).
-      getOrElse(Transform(success(input)))
-  }
+  def resolve(all: Set[Expr[Any]]) =
+    interpolate(all) andThen validate andThen pick
 
   /** Zips a command line input with all command Exprs that matches that input in size.
     *
     * @param commands command Exprs
     * @return an interpretation step
     */
-  def interpolate(commands: Set[Expr]) = transform { (input: List[String]) =>
+  def interpolate(commands: Set[Expr[Any]]) = transform { (input: List[String]) =>
     val args = if (input.isEmpty) List("") else input
     commands.
-      filter(_.depth == args.size).
-      map(_ zipWithList args).
+      filter(_.size == args.size).
+      map(_ zip args).
       toList.
       successNel
   }
 
-  /** Keeps interpolated command line Exprs that satisfy the given predicate.
+  /** Strictly validates the syntax and types of an interpolated AST.
     *
-    * @param f predicate stating the condition of preservation
-    * @return an interpretation step
+    * @return List of AST's that pass the validation
     */
-  def filter(f: AST => Boolean) = transform { (commands: List[AST]) =>
-    success(commands.filter(f))
-  }
-
-  /** Applies a validation function on a list of interpolated command
-    * line Exprs. Essentially used to validate the concrete input against
-    * the expectation with which it has been zipped.
-    *
-    * @param f validation function
-    * @return an interpretation step
-    */
-  def validate(f: ((Denotation[Any], String)) => Result[(Denotation[Any], String)]) = transform { (commands: List[AST]) =>
-    val point = success(List.empty[AST])
-    commands.map(_ validate f)
-      .filter(_.isSuccess)
-      .foldRight(point)((a, b) => (a |@| b) (_ :: _))
+  def validate = transform { candidates: List[AST[Any]] =>
+    candidates.
+      filter { candidate =>
+        Validators.validate(candidate)(syntax).isSuccess &&
+          Validators.validate(candidate)(types).isSuccess
+      }.
+      successNel
   }
 
   /** Picks the final command Expr from a list of possible Exprs.
@@ -322,16 +236,16 @@ object Interpreter {
     *
     * @return an interpretation step
     */
-  def pick = transform { (commands: List[AST]) =>
+  def pick = transform { (commands: List[AST[Any]]) =>
     commands match {
       case h :: Nil => success(h)
       case Nil => failure("No command found matching input")
       case xs => failure {
-        s"Ambiguous input. There are ${xs.size} matches for this input\n" +
+        s"Ambiguous input. There are ${xs.size} matches for this input\n${
           xs.
-            map(_.string(" ")(_._1.show)).
+            map(_.map(_._1.show).mkString(" ")).
             map(x => Formatter(x).push(5).runMake).
-            mkString("")
+            mkString("")}"
       }
     }
   }
@@ -343,11 +257,12 @@ object Interpreter {
     * @tparam A type of the command result
     * @return an interpretation step
     */
-  def runFrom[A](cli: Cli[A]) = phase { (command: AST) =>
-    val key = command map (_._1)
-    val fail = Transform(failure("Unknown command"))
+  def runFrom[A](cli: Cli[A]) = phase { (ast: AST[Any]) =>
+    val expr = ast map (_._1)
 
-    cli.get(key).fold[Step[A]](fail)(cmd => run(cmd).run(command))
+    cli.get(expr).
+      map(cmd => run(cmd).run(ast)).
+      getOrElse(Transform(failure("Unknown command")))
   }
 
   /** Runs the function of a single command.
@@ -356,38 +271,37 @@ object Interpreter {
     * @tparam A type of command result
     * @return an interpretation step
     */
-  def run[A](command: Command[A]): Phase[AST, A] = transform { (ast: AST) =>
-    val args = ast.filter(_._1.isTyped).map(_._2)
-    command.fn.run(args)
+  def run[A](command: Command[A]): Phase[AST[Any], A] = transform { (ast: AST[Any]) =>
+    val args = ast.filter(_._1.isTyped).map(_._2).toList
+    command.fn(args)
   }
 }
 
-// TODO: Define a validation typeclass and abstract over this shit
 object Validators {
+
+  def validate[A](v: Vector[A])(f: A => Result[A]): Result[Vector[A]] = traverseVector.traverse(v)(f)
 
   /** Function for validating the syntax of an input against its expectation.
     *
-    * @param assoc association between expectation and concrete input
+    * @param value association between expectation and concrete input
     * @return result of validation
     */
-  def syntax(assoc: (Denotation[Any], String)) = (assoc match {
-    case (Com(label, _), input) if label == input => Some(assoc)
-    case (Opt(labels, _), input) if labels.contains(input) => Some(assoc)
-    case (Assgn(labels, op, _, _), input) if labels.exists(v => input startsWith v + op) => Some(assoc)
-    case (Arg(_, _), _) => Some(assoc)
-    case _ => None
-  }).fold {
-    failure[(Denotation[Any], String)](s"Input of `${assoc._2}` does not match the expected input of ${assoc._1.show}")
-  } { _ => success(assoc) }
+  def syntax(value: (Denotation[Any], String)): Result[(Denotation[Any], String)] = value match {
+    case (Com(label, _), input) if label == input => success(value)
+    case (Opt(labels, _), input) if labels contains input => success(value)
+    case (Assgn(labels, op, _, _), input) if labels exists (v => input startsWith v + op) => success(value)
+    case (Arg(_, _), _) => success(value)
+    case _ => failure(s"Input of `${value._2}` does not match the expected input of ${value._1.show}")
+  }
 
   /** Function for validation the type of an input against its expectation.
     *
-    * @param assoc association between expectation and concrete input
+    * @param value association between expectation and concrete input
     * @return result of validation
     */
-  def types(assoc: (Denotation[Any], String)) = assoc match {
-    case (Arg(read, _), input) => read(input).map(_ => assoc)
-    case (Assgn(_, op, read, _), input) => read(input.split(op)(1)).map(_ => assoc)
-    case _ => success(assoc)
+  def types(value: (Denotation[Any], String)) = value match {
+    case (Arg(read, _), input) => read(input).map(_ => value)
+    case (Assgn(_, _, read, _), input) => read(input).map(_ => value)
+    case _ => success(value)
   }
 }
