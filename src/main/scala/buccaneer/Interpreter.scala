@@ -108,15 +108,16 @@ object Interpreter {
     * @param input    input of command elements
     * @return set of command Exprs that partially match the input
     */
+  // TODO: This has to be exact in the input length. `zip` on vector will not exclude valid partial expressions
   def partialMatch(commands: Set[Expr[Any]], input: Args): Set[Expr[Any]] =
     if (input.isEmpty) commands
     else commands.filter {
       _.zip(input).
         forall {
           case (Com(label, _), value) => label startsWith value
-          case (Opt(labels, _), value) => labels exists (_ startsWith value)
+          case (Opt(labels, _), value) => labels exists (label => label startsWith value)
           case (Arg(read, _), value) => read(value).isSuccess
-          case (Assgn(labels, op, _, _), value) => labels exists (s => (s + op) startsWith value)
+          case (Assgn(labels, _, _, _), value) => labels exists (label => (label startsWith value) || (value startsWith label))
         }
     }
 
@@ -140,7 +141,7 @@ object Interpreter {
     * @tparam A type of command result
     * @return an interpretation step
     */
-  def interpret[A](command: Command[A]) = resolve(command.expr.unbundle) andThen run(command)
+  def interpret[A](command: Command[A]) = resolve(command.expr.expand) andThen run(command)
 
 
   /** Provides interpretation for an entire command line interface.
@@ -180,9 +181,9 @@ object Interpreter {
     */
   def meta[A](cli: Cli[A], manConfig: ManConfig) = phase { (input: List[String]) =>
     (for {
-      arg <- input.lastOption
-      help = manConfig.help.labels.find(_ == arg).map(_ => Man.help(_))
-      suggest = manConfig.suggest.labels.find(_ == arg).map(_ => Man.suggest(_))
+      opt <- input.lastOption
+      help = manConfig.help.labels.find(_ == opt).map(_ => Man.help(_))
+      suggest = manConfig.suggest.labels.find(_ == opt).map(_ => Man.suggest(_))
       helpOrSuggest <- help orElse suggest
       command = input.dropRight(1)
     } yield matching(cli.keySet, command).flatMap { matching =>
@@ -289,7 +290,7 @@ object Validators {
   def syntax(value: (Denotation[Any], String)): Result[(Denotation[Any], String)] = value match {
     case (Com(label, _), input) if label == input => success(value)
     case (Opt(labels, _), input) if labels contains input => success(value)
-    case (Assgn(labels, op, _, _), input) if labels exists (v => input startsWith v + op) => success(value)
+    case (Assgn(labels, op, _, _), input) if labels exists (label => input startsWith (label + op)) => success(value)
     case (Arg(_, _), _) => success(value)
     case _ => failure(s"Input of `${value._2}` does not match the expected input of ${value._1.show}")
   }
@@ -299,7 +300,7 @@ object Validators {
     * @param value association between expectation and concrete input
     * @return result of validation
     */
-  def types(value: (Denotation[Any], String)) = value match {
+  def types(value: (Denotation[Any], String)): Result[(Denotation[Any], String)] = value match {
     case (Arg(read, _), input) => read(input).map(_ => value)
     case (Assgn(_, _, read, _), input) => read(input).map(_ => value)
     case _ => success(value)

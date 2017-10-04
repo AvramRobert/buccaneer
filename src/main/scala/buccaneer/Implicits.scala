@@ -1,7 +1,6 @@
 package buccaneer
 
 import java.io.File
-
 import buccaneer.Read._
 import scala.collection.generic.CanBuildFrom
 import scala.language.implicitConversions
@@ -12,10 +11,10 @@ trait ReadImplicits {
     if (input.isEmpty) success(())
     else failure("")
   }
-  implicit val readInt: Read[Int] = Read("Int")(unsafeCoerce(_)(_.toInt))
-  implicit val readBool: Read[Boolean] = Read("Boolean")(unsafeCoerce(_)(_.toBoolean))
-  implicit val readString: Read[String] = Read("String")(success)
-  implicit val readLong: Read[Long] = Read("Long")(unsafeCoerce(_)(_.toLong))
+  implicit val readInt: Read[Int] = Read.attempt("Int")(_.toInt)
+  implicit val readBool: Read[Boolean] = Read.attempt("Boolean")(_.toBoolean)
+  implicit val readString: Read[String] = Read.attempt("String")(identity)
+  implicit val readLong: Read[Long] = Read.attempt("Long")(_.toLong)
   implicit val readDouble: Read[Double] = Read("Double") { s =>
     if (s.contains(".")) unsafeCoerce(s)(_.toDouble)
     else failure(s"Cannot read double value of '$s'")
@@ -26,13 +25,13 @@ trait ReadImplicits {
   }
 
   // I should probably add some syntactic characteristics to BigInts in order to avoid ambiguity
-  implicit val readBigInt: Read[BigInt] = Read("BigInt")(unsafeCoerce(_)(x => BigInt(x)))
+  implicit val readBigInt: Read[BigInt] = Read.attempt("BigInt")(x => BigInt(x))
   implicit val readBigDecimal: Read[BigDecimal] = Read("BigDecimal") { s =>
     if (s.toLowerCase.endsWith("d")) unsafeCoerce(s.dropRight(1))(x => BigDecimal(x.toString))
     else failure(s"Cannot read big decimal value of '$s'")
   }
 
-  implicit val readFile: Read[File] = Read("Path")(unsafeCoerce(_)(x => new File(x)))
+  implicit val readFile: Read[File] = Read.attempt("Path")(x => new File(x))
 
   implicit def readColl[T[X] <: TraversableOnce[X], A](implicit proof: Read[A], cbf: CanBuildFrom[T[A], A, T[A]]): Read[T[A]] =
     Read(s"Coll[${proof.show}]") { s =>

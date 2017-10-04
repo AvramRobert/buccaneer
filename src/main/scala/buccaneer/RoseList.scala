@@ -2,16 +2,14 @@ package buccaneer
 
 import scala.annotation.tailrec
 
-// FIXME: Wouldn't actually be a better idea to use `RoseList` up until the interpretation step
-// A RoseList would be stored in the Cli and only unbundled when an input is given and interpreted
-// This would thus allow me to do transformations when the input is known, instead of unbundling blindly beforehand
-// This would also make, for example, varargs possible, whereupon I would unbundle the remaining input when interpreting
 object RoseList { self =>
   def empty[A]: RoseList[A] = Stem
 
-  def prepend[A](roseList: RoseList[A], a: A): RoseList[A] = Petal(a, roseList)
-
-  def prependMany[A](roseList: RoseList[A], as: A*): RoseList[A] = Bundle(as.toList, roseList)
+  def prepend[A](roseList: RoseList[A], as: A*): RoseList[A] = as match {
+    case Seq() => roseList
+    case Seq(a) => Petal(a, roseList)
+    case seq => Bundle(seq.toList, roseList)
+  }
 
   def grow[A](roseList: RoseList[A], a: A): RoseList[A] = roseList match {
     case Bundle(as, link) => Bundle(a :: as, link)
@@ -22,14 +20,14 @@ object RoseList { self =>
   def reverse[A](roseList: RoseList[A]): RoseList[A] = {
     @tailrec def go(rem: RoseList[A], acc: RoseList[A] = Stem): RoseList[A] = rem match {
       case Petal(a, tail) => go(tail, prepend(acc, a))
-      case Bundle(as, tail) => go(tail, prependMany(acc, as: _*))
+      case Bundle(as, tail) => go(tail, prepend(acc, as: _*))
       case Stem => acc
     }
 
     go(roseList)
   }
 
-  def unbundle[A](roseList: RoseList[A]): Set[Vector[A]] = {
+  def expand[A](roseList: RoseList[A]): Set[Vector[A]] = {
     def go(rem: RoseList[A], cur: Vector[A] = Vector.empty, total: Set[Vector[A]] = Set.empty): Set[Vector[A]] = rem match {
       case Petal(a, t) => go(t, cur :+ a, total)
       case Bundle(as, t) =>
@@ -41,13 +39,12 @@ object RoseList { self =>
   }
 
   implicit class RoseListOps[A](roseList: RoseList[A]) {
-    def prepend(a: A): RoseList[A] = self.prepend(roseList, a)
-
-    def prependMany(as: A*): RoseList[A] = self.prependMany(roseList, as: _*)
+    def prepend(as: A*): RoseList[A] = self.prepend(roseList, as: _*)
 
     def grow(a: A): RoseList[A] = self.grow(roseList, a)
 
-    def unbundle: Set[Vector[A]] = self.unbundle(self.reverse(roseList))
+    def expand: Set[Vector[A]] = self.expand(self.reverse(roseList))
+
   }
 }
 

@@ -67,8 +67,7 @@ trait CommandOps {
     * @return typed identifier denotation
     */
   def assignment[A: Read](labels: String*)(op: String): Assgn[A] = {
-    val proof = prove[A]
-    val read = Read(proof.show)(s => proof(s.split(op)(1)))
+    val read = Read.constrain(prove[A])(_.split(op)(1))
     Assgn(labels.toList, op, read, "")
   }
 
@@ -81,8 +80,7 @@ trait CommandOps {
     * @return typed identifier denotation
     */
   def assignment[A: Read](p: A => Boolean)(labels: String*)(op: String): Assgn[A] = {
-    val proof = prove[A]
-    val read = Read(proof.show)(s => proof(s.split(op)(1)))
+    val read = Read.constrain(prove[A])(_.split(op)(1))
     Assgn(labels.toList, op, readWhen(read)(p), "")
   }
 }

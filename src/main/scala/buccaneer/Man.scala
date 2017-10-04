@@ -116,6 +116,20 @@ object Man {
     */
   def paired(command: SAST[Any]): Vector[(String, String)] = command.map { d => (d._1.show, d._1.description) }
 
+
+  /** Validates an input against its denotation and returns
+    * the input if valid, otherwise the denotation `show`
+    * @param value the denotation and possible input
+    * @return string representation of either input or denotation
+    */
+  def sow(value: (Denotation[Any], Option[String])): String = value match {
+    case (c@Com(_, _), Some(i)) if Validators.syntax((c, i)).isSuccess => i
+    case (o@Opt(_, _), Some(i)) if Validators.syntax((o, i)).isSuccess => i
+    case (a@Arg(_, _), Some(i)) if Validators.types((a, i)).isSuccess => i
+    case (a@Assgn(_, _, _, _), Some(i)) if Validators.syntax((a, i)).isSuccess && Validators.types((a, i)).isSuccess => i
+    case (x, _) => x.show
+  }
+
   /** Given a number of command shapes, returns the size of the command
     * whose string representation is largest.
     *
@@ -176,10 +190,12 @@ object Man {
     * @param all input-relative command shapes
     * @return a section containing a vector of all options in text form
     */
-  def options(all: Set[SAST[Any]]): Section[Vector[Formatter]] = pairedSection { _ =>
+  def options(all: Set[SAST[Any]]): Section[Vector[Formatter]] = pairedSection { config =>
+    val meta = Vector((config.help, None), (config.suggest, None))
     all.map(_.dropWhile(_._2.isDefined)).
       filterNot(_.headOption exists (_._1.isCommand)).
-      map(_.filter(_._1.isOption))
+      map(_.filter(_._1.isOption)).
+      map(_ ++ meta)
   }
 
   /** Creates the usages section of a MAN page
@@ -194,7 +210,7 @@ object Man {
       map(x => s"[${x._1.show}]").
       grouped(3).
       toVector.
-      map(x => Formatter(x.mkString("|")).widen(_ + config.indentation).push(config.indentation))
+      map(x => Formatter(x.mkString(" ")).widen(_ + config.indentation).push(config.indentation))
   }
 
   /** Creates a complete text from a collection of formatters.
@@ -243,7 +259,13 @@ object Man {
     * @param local shape of commands corresponding to input
     * @return a section of text that returns the box of suggestions given a `ManConfig`
     */
-  def suggest(local: Set[SAST[Any]]): Section[String] = section { config => ??? }
+  def suggest(local: Set[SAST[Any]]): Section[String] = section { config =>
+    makeText {
+      local.toVector.
+        map(_.map(sow)).
+        map(x => Formatter(x.mkString(" ")))
+    }
+  }
 }
 
 object Formatter {

@@ -8,6 +8,6 @@ object Cli {
   type Cli[A] = Map[Expr[Any], Command[A]]
 
   def apply[A](commands: Command[A]*): Cli[A] = commands.flatMap { c =>
-    c.expr.unbundle map (_ -> c)
+    c.expr.expand map (_ -> c)
   }.toMap
 }
