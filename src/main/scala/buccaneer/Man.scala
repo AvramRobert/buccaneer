@@ -114,7 +114,7 @@ object Man {
     * @param command command shape
     * @return a vector of tuples containing the element string form and its documentation
     */
-  def paired(command: SAST[Any]): Vector[(String, String)] = command.map { d => (d._1.show, d._1.description) }
+  def paired(command: AST[Any]): List[(String, String)] = command.map { d => (d._1.show, d._1.description) }
 
 
   /** Validates an input against its denotation and returns
@@ -123,10 +123,10 @@ object Man {
     * @return string representation of either input or denotation
     */
   def sow(value: (Denotation[Any], Option[String])): String = value match {
-    case (c@Com(_, _), Some(i)) if Validators.syntax((c, i)).isSuccess => i
-    case (o@Opt(_, _), Some(i)) if Validators.syntax((o, i)).isSuccess => i
-    case (a@Arg(_, _), Some(i)) if Validators.types((a, i)).isSuccess => i
-    case (a@Assgn(_, _, _, _), Some(i)) if Validators.syntax((a, i)).isSuccess && Validators.types((a, i)).isSuccess => i
+    case (c@Com(_, _), i@Some(v)) if Validators.syntax((c, i)).isSuccess => v
+    case (o@Opt(_, _), i@Some(v)) if Validators.syntax((o, i)).isSuccess => v
+    case (a@Arg(_, _), i@Some(v)) if Validators.types((a, i)).isSuccess => v
+    case (a@Assgn(_, _, _, _), i@Some(v)) if Validators.syntax((a, i)).isSuccess && Validators.types((a, i)).isSuccess => v
     case (x, _) => x.show
   }
 
@@ -136,15 +136,15 @@ object Man {
     * @param all vector of command shapes
     * @return size of the largest from `all`
     */
-  def largest(all: Set[SAST[Any]]): Int = {
+  def largest(all: Set[AST[Any]]): Int = {
     if(all.isEmpty) 0
     else all.map(_.map(_._1).mkString("").length).max
   }
 
-  def pairedSection(f: ManConfig => Set[SAST[Any]]): Section[Vector[Formatter]] = section { config =>
+  def pairedSection(f: ManConfig => Set[AST[Any]]): Section[List[Formatter]] = section { config =>
     val items = f(config)
     val max = largest(items)
-    val empty = Vector[(String, String)]()
+    val empty = List[(String, String)]()
     items.map(paired).
       foldLeft(empty)(_ ++ _).
       distinct.
@@ -159,8 +159,8 @@ object Man {
     * @param all input-relative command shapes to extract information from
     * @return section of text that will create the formatted block of text when given a `ManConfig`
     */
-  def command(all: Set[SAST[Any]]): Section[Vector[Formatter]] = pairedSection { config =>
-    lazy val program = (config.program, Some(""))
+  def command(all: Set[AST[Any]]): Section[List[Formatter]] = pairedSection { config =>
+    lazy val program = (config.program, None)
     all.headOption.
       flatMap(_.takeWhile(x => x._1.isCommand && x._2.isDefined).lastOption).
       map {
@@ -168,7 +168,7 @@ object Man {
         case _ => program
       }.
       orElse(Some(program)).
-      map(Vector[(Denotation[Any], Option[String])](_)).
+      map(List[(Denotation[Any], Option[String])](_)).
       toSet
   }
 
@@ -177,7 +177,7 @@ object Man {
     * @param all command shapes relative to input
     * @return a section containing a vector of all subcommands in text form
     */
-  def subcommands(all: Set[SAST[Any]]): Section[Vector[Formatter]] = pairedSection { _ =>
+  def subcommands(all: Set[AST[Any]]): Section[List[Formatter]] = pairedSection { _ =>
     all.map { sast =>
       sast.
         dropWhile(x => x._1.isCommand && x._2.isDefined).
@@ -190,8 +190,8 @@ object Man {
     * @param all input-relative command shapes
     * @return a section containing a vector of all options in text form
     */
-  def options(all: Set[SAST[Any]]): Section[Vector[Formatter]] = pairedSection { config =>
-    val meta = Vector((config.help, None), (config.suggest, None))
+  def options(all: Set[AST[Any]]): Section[List[Formatter]] = pairedSection { config =>
+    val meta = (config.help, None) :: (config.suggest, None) :: Nil
     all.map(_.dropWhile(_._2.isDefined)).
       filterNot(_.headOption exists (_._1.isCommand)).
       map(_.filter(_._1.isOption)).
@@ -203,13 +203,13 @@ object Man {
     * @param all command shapes to extract information from
     * @return section of text that will create the formatted block of text when given a `ManConfig`
     */
-  def usages(all: Set[SAST[Any]]): Section[Vector[Formatter]] = section { config =>
+  def usages(all: Set[AST[Any]]): Section[List[Formatter]] = section { config =>
     all.map(_.dropWhile(_._2.isDefined)).
       filterNot(_.headOption exists (_._1.isCommand)).
       flatMap(_.filterNot(_._1.isCommand)).
       map(x => s"[${x._1.show}]").
       grouped(3).
-      toVector.
+      toList.
       map(x => Formatter(x.mkString(" ")).widen(_ + config.indentation).push(config.indentation))
   }
 
@@ -218,11 +218,11 @@ object Man {
     * @param formatters formatters with formatted text
     * @return a string containing all formatted texts
     */
-  def makeText(formatters: Vector[Formatter]): String = {
-    formatters.foldLeft(Vector.empty[Char]) { (acc, frmt) => acc ++ frmt.runH }.mkString("")
+  def makeText(formatters: List[Formatter]): String = {
+    formatters.foldLeft(List.empty[Char]) { (acc, frmt) => acc ++ frmt.runH }.mkString("")
   }
 
-  /** `getOrElse`-like function for empty collections of formatters.
+  /** `getOrElse`-like function for empty lists of formatters.
     * Lifts `txt` into a formatter when `v` is empty and returns that.
     * Otherwise returns `v`.
     *
@@ -230,8 +230,8 @@ object Man {
     * @param txt alternative if `v` is empty
     * @return vector of formatters
     */
-  def whenEmpty(v: Vector[Formatter])(txt: => String): Vector[Formatter] = {
-    if (v.isEmpty) Vector(text(txt))
+  def whenEmpty(v: List[Formatter])(txt: => String): List[Formatter] = {
+    if (v.isEmpty) text(txt) :: Nil
     else v
   }
 
@@ -240,7 +240,7 @@ object Man {
     *
     * @return section of text that returns the MAN page when given a `ManConfig`
     */
-  def help(input: Set[SAST[Any]]): Section[String] = for {
+  def help(input: Set[AST[Any]]): Section[String] = for {
     commandSection <- command(input)
     optionsSection <- options(input)
     usagesSection <- usages(input)
@@ -259,9 +259,9 @@ object Man {
     * @param local shape of commands corresponding to input
     * @return a section of text that returns the box of suggestions given a `ManConfig`
     */
-  def suggest(local: Set[SAST[Any]]): Section[String] = section { config =>
+  def suggest(local: Set[AST[Any]]): Section[String] = section { config =>
     makeText {
-      local.toVector.
+      local.toList.
         map(_.map(sow)).
         map(x => Formatter(x.mkString(" ")))
     }

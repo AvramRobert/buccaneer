@@ -1,11 +1,12 @@
 package buccaneer
 
 import buccaneer.Cli.Cli
+
 import scalaz.syntax.validation._
 import scalaz.{Failure, Kleisli}
 import buccaneer.Validators._
 
-/** A GADT for modelling the different types of steps in the interpreter.
+/** An ADT for modelling the different types of steps in the interpreter.
   *
   * @tparam A type of interpretation
   */
@@ -187,7 +188,7 @@ object Interpreter {
       helpOrSuggest <- help orElse suggest
       command = input.dropRight(1)
     } yield matching(cli.keySet, command).flatMap { matching =>
-      Meta(helpOrSuggest(matching.map(x => traverseVector.zipL(x, command.toVector))).run(manConfig))
+      Meta(helpOrSuggest(matching.map(x => traverseList.zipL(x, command))).run(manConfig))
     }).
       getOrElse(Transform(success(input)))
   }
@@ -211,8 +212,7 @@ object Interpreter {
     val args = if (input.isEmpty) List("") else input
     commands.
       filter(_.size == args.size).
-      map(_ zip args).
-      toList.
+      map(x => traverseList.zipL(x, args)).
       successNel
   }
 
@@ -220,11 +220,11 @@ object Interpreter {
     *
     * @return List of AST's that pass the validation
     */
-  def validate = transform { candidates: List[AST[Any]] =>
+  def validate = transform { candidates: Set[AST[Any]] =>
     candidates.
       filter { candidate =>
         Validators.validate(candidate)(syntax).isSuccess &&
-          Validators.validate(candidate)(types).isSuccess
+        Validators.validate(candidate)(types).isSuccess
       }.
       successNel
   }
@@ -237,13 +237,13 @@ object Interpreter {
     *
     * @return an interpretation step
     */
-  def pick = transform { (commands: List[AST[Any]]) =>
+  def pick = transform { (commands: Set[AST[Any]]) =>
     commands match {
-      case h :: Nil => success(h)
-      case Nil => failure("No command found matching input")
-      case xs => failure {
-        s"Ambiguous input. There are ${xs.size} matches for this input\n${
-          xs.
+      case set if set.isEmpty => failure("No command found matching input")
+      case set if set.size == 1 => success(set.head)
+      case set => failure {
+        s"Ambiguous input. There are ${set.size} matches for this input\n${
+          set.
             map(_.map(_._1.show).mkString(" ")).
             map(x => Formatter(x).push(5).runMake).
             mkString("")}"
@@ -273,24 +273,24 @@ object Interpreter {
     * @return an interpretation step
     */
   def run[A](command: Command[A]): Phase[AST[Any], A] = transform { (ast: AST[Any]) =>
-    val args = ast.filter(_._1.isTyped).map(_._2).toList
+    val args = ast.filter(_._1.isTyped).map(_._2.get)
     command.fn(args)
   }
 }
 
 object Validators {
 
-  def validate[A](v: Vector[A])(f: A => Result[A]): Result[Vector[A]] = traverseVector.traverse(v)(f)
+  def validate[A](v: List[A])(f: A => Result[A]): Result[List[A]] = traverseList.traverse(v)(f)
 
   /** Function for validating the syntax of an input against its expectation.
     *
     * @param value association between expectation and concrete input
     * @return result of validation
     */
-  def syntax(value: (Denotation[Any], String)): Result[(Denotation[Any], String)] = value match {
-    case (Com(label, _), input) if label == input => success(value)
-    case (Opt(labels, _), input) if labels contains input => success(value)
-    case (Assgn(labels, op, _, _), input) if labels exists (label => input startsWith (label + op)) => success(value)
+  def syntax(value: (Denotation[Any], Option[String])): Result[(Denotation[Any], Option[String])] = value match {
+    case (Com(label, _), Some(input)) if label == input => success(value)
+    case (Opt(labels, _), Some(input)) if labels contains input => success(value)
+    case (Assgn(labels, op, _, _), Some(input)) if labels exists (label => input startsWith (label + op)) => success(value)
     case (Arg(_, _), _) => success(value)
     case _ => failure(s"Input of `${value._2}` does not match the expected input of ${value._1.show}")
   }
@@ -300,9 +300,11 @@ object Validators {
     * @param value association between expectation and concrete input
     * @return result of validation
     */
-  def types(value: (Denotation[Any], String)): Result[(Denotation[Any], String)] = value match {
-    case (Arg(read, _), input) => read(input).map(_ => value)
-    case (Assgn(_, _, read, _), input) => read(input).map(_ => value)
+  def types(value: (Denotation[Any], Option[String])): Result[(Denotation[Any], Option[String])] = value match {
+    case (Arg(read, _), Some(input)) => read(input).map(_ => value)
+    case (Assgn(_, _, read, _), Some(input)) => read(input).map(_ => value)
+    case (Arg(read, _), None) => failure(s"Cannot coerce empty input to type ${read.show}")
+    case (Assgn(_, _, read, _), None) => failure(s"Cannot coerce empty input to type ${read.show}")
     case _ => success(value)
   }
 }

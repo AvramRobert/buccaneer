@@ -2,7 +2,7 @@ import java.io.File
 
 import buccaneer.Implicits._
 
-import buccaneer.Read.readWhen
+import buccaneer.Read.{readWhen, constrain}
 import scalaz.Success
 
 class ReadSpec extends DefaultTestSuite {
@@ -26,6 +26,12 @@ class ReadSpec extends DefaultTestSuite {
         whenever(i > max) {
           readWhen(readInt)(_ > max)(i.toString) shouldBe Success(i)
         }
+      }
+    }
+
+    "constrain inputs before reading" in {
+      forAll { (i: Int) =>
+        constrain(readInt)(_.split(":")(1))(s"a:$i") shouldBe Success(i)
       }
     }
 

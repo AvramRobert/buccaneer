@@ -1,7 +1,5 @@
 package buccaneer
 
-import scala.annotation.tailrec
-
 object RoseList { self =>
   def empty[A]: RoseList[A] = Stem
 
@@ -17,24 +15,13 @@ object RoseList { self =>
     case Stem => prepend(roseList, a)
   }
 
-  def reverse[A](roseList: RoseList[A]): RoseList[A] = {
-    @tailrec def go(rem: RoseList[A], acc: RoseList[A] = Stem): RoseList[A] = rem match {
-      case Petal(a, tail) => go(tail, prepend(acc, a))
-      case Bundle(as, tail) => go(tail, prepend(acc, as: _*))
-      case Stem => acc
-    }
-
-    go(roseList)
-  }
-
-  def expand[A](roseList: RoseList[A]): Set[Vector[A]] = {
-    def go(rem: RoseList[A], cur: Vector[A] = Vector.empty, total: Set[Vector[A]] = Set.empty): Set[Vector[A]] = rem match {
-      case Petal(a, t) => go(t, cur :+ a, total)
+  def expand[A](roseList: RoseList[A]): Set[List[A]] = {
+    def go(rem: RoseList[A], cur: List[A] = List.empty, total: Set[List[A]] = Set.empty): Set[List[A]] = rem match {
+      case Petal(a, t) => go(t, a :: cur, total)
       case Bundle(as, t) =>
-        total ++ as.permutations.toSet.flatMap { perm: List[A] => go(t, cur ++ perm.toVector) }
+        total ++ as.permutations.toSet.flatMap { perm: List[A] => go (t, perm ::: cur) }
       case Stem => total + cur
     }
-
     go(roseList)
   }
 
@@ -43,8 +30,7 @@ object RoseList { self =>
 
     def grow(a: A): RoseList[A] = self.grow(roseList, a)
 
-    def expand: Set[Vector[A]] = self.expand(self.reverse(roseList))
-
+    def expand: Set[List[A]] = self.expand(roseList)
   }
 }
 
