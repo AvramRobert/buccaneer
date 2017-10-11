@@ -38,37 +38,37 @@ object passwords {
   }
 
   val passwords = Cli(
-    version.apply { _ => List("Passwords 0.1.0") },
-    empty.apply { _ => generate() },
-    exclusion.apply { ex => generate(dictionary = exclude(ex)) },
-    seed.apply { seed => generate(seed = seed) },
-    max.apply { max => generate(minLength = pickMin(max), maxLength = max) },
-    min.apply { min => generate(minLength = min, maxLength = pickMax(min)) },
-    (gen - min - max).apply { case (min, max) => generate(minLength = min, maxLength = max) },
-    (gen - minusS - seed). apply { s => generate(seed = s) },
-    (min - max).apply { case (min, max) => generate(minLength = min, maxLength = max) },
-    (max - seed). apply { case (max, seed) => generate(minLength = pickMin(max), maxLength = max, seed = seed) },
-    (min - seed).apply { case (min, seed) => generate(minLength = min, maxLength = pickMax(min), seed = seed) },
-    (seed - min).apply { case (seed, min) => generate(minLength = min, maxLength = pickMax(min), seed = seed) },
-    (seed - max).apply { case (seed, max) => generate(minLength = pickMin(max), maxLength = max, seed = seed) },
-    (exclusion - min).apply { case (ex, min) => generate(minLength = min, maxLength = pickMax(min), dictionary = exclude(ex)) },
-    (exclusion - max).apply { case (ex, max) => generate(minLength = pickMin(max), maxLength = max, dictionary = exclude(ex)) },
-    (max - exclusion).apply { case (max, ex) => generate(minLength = pickMin(max), maxLength = max, dictionary = exclude(ex)) },
-    (min - exclusion).apply { case (min, ex) => generate(minLength = min, maxLength = pickMax(min), dictionary = exclude(ex)) },
-    (min - max - seed).apply { case (min, max, seed) => generate(minLength = min, maxLength = max, seed = seed) },
-    (seed - min - max).apply { case (seed, min, max) => generate(minLength = min, maxLength = max, seed = seed) },
-    (min - max - exclusion).apply { case (min, max, ex) => generate(minLength = min, maxLength = max, dictionary = exclude(ex)) },
-    (exclusion - min - max).apply { case (ex, min, max) => generate(minLength = min, maxLength = max, dictionary = exclude(ex)) },
-    (min - max - exclusion - seed).apply { case (min, max, ex, seed) =>
+    (>> - version).apply { _ => List("Passwords 0.1.0") },
+    (>> - empty).apply { _ => generate() },
+    (>> - exclusion).apply { ex => generate(dictionary = exclude(ex)) },
+    (>> - seed).apply { seed => generate(seed = seed) },
+    (>> - max).apply { max => generate(minLength = pickMin(max), maxLength = max) },
+    (>> - min).apply { min => generate(minLength = min, maxLength = pickMax(min)) },
+    (>> - gen - min - max).apply { case (min, max) => generate(minLength = min, maxLength = max) },
+    (>> - gen - minusS - seed). apply { s => generate(seed = s) },
+    (>> - min - max).apply { case (min, max) => generate(minLength = min, maxLength = max) },
+    (>> - max - seed). apply { case (max, seed) => generate(minLength = pickMin(max), maxLength = max, seed = seed) },
+    (>> - min - seed).apply { case (min, seed) => generate(minLength = min, maxLength = pickMax(min), seed = seed) },
+    (>> - seed - min).apply { case (seed, min) => generate(minLength = min, maxLength = pickMax(min), seed = seed) },
+    (>> - seed - max).apply { case (seed, max) => generate(minLength = pickMin(max), maxLength = max, seed = seed) },
+    (>> - exclusion - min).apply { case (ex, min) => generate(minLength = min, maxLength = pickMax(min), dictionary = exclude(ex)) },
+    (>> - exclusion - max).apply { case (ex, max) => generate(minLength = pickMin(max), maxLength = max, dictionary = exclude(ex)) },
+    (>> - max - exclusion).apply { case (max, ex) => generate(minLength = pickMin(max), maxLength = max, dictionary = exclude(ex)) },
+    (>> - min - exclusion).apply { case (min, ex) => generate(minLength = min, maxLength = pickMax(min), dictionary = exclude(ex)) },
+    (>> - min - max - seed).apply { case (min, max, seed) => generate(minLength = min, maxLength = max, seed = seed) },
+    (>> - seed - min - max).apply { case (seed, min, max) => generate(minLength = min, maxLength = max, seed = seed) },
+    (>> - min - max - exclusion).apply { case (min, max, ex) => generate(minLength = min, maxLength = max, dictionary = exclude(ex)) },
+    (>> - exclusion - min - max).apply { case (ex, min, max) => generate(minLength = min, maxLength = max, dictionary = exclude(ex)) },
+    (>> - min - max - exclusion - seed).apply { case (min, max, ex, seed) =>
       generate(minLength = min, maxLength = max, seed = seed, dictionary = exclude(ex))
     },
-    (min - max - seed - exclusion).apply { case (min, max, seed, ex) =>
+    (>> - min - max - seed - exclusion).apply { case (min, max, seed, ex) =>
       generate(minLength = min, maxLength = max, seed = seed, dictionary = exclude(ex))
     },
-    (seed - exclusion - min - max).apply { case (seed, ex, min, max) =>
+    (>> - seed - exclusion - min - max).apply { case (seed, ex, min, max) =>
       generate(minLength = min, maxLength = max, seed = seed, dictionary = exclude(ex))
     },
-    (exclusion - seed - min - max).apply { case (ex, seed, min, max) =>
+    (>> - exclusion - seed - min - max).apply { case (ex, seed, min, max) =>
       generate(minLength = min, maxLength = max, seed = seed, dictionary = exclude(ex))
     })
 

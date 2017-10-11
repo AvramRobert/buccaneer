@@ -18,10 +18,12 @@ class InterpreterSpec extends DefaultTestSuite {
     def aInt(labels: String*) = assignment[Int](labels: _*)("=")
     val argInt = argument[Int]
     val argNothing = argument[Unit]
+    val optA = option("-a")
+    val optB = option("-b")
 
     "correctly interpret single commands" in {
       forAll { (name: String, a: Int, b: Int, f: ((Int, Int)) => Int) =>
-        val cmd = (command(name) - argument[Int] - argument[Int]).apply(f)
+        val cmd = (>> - command(name) - argInt - argInt).apply(f)
         checkSucc(Interpreter.interpret(cmd).run(List(name, a.toString, b.toString)), f(a, b))
       }
     }
@@ -29,8 +31,8 @@ class InterpreterSpec extends DefaultTestSuite {
     "correctly interpret commands without arguments" in {
       forAll { (name: String, a: Int, b: Int, f: ((Int, Int)) => Int) =>
         val cli = Cli(
-          (command(name) - argInt - argInt).apply(f),
-          argNothing.apply { _ => f(a, b) }
+          (>> - command(name) - argInt - argInt).apply(f),
+          (>> - argNothing).apply { _ => f(a, b) }
         )
 
         checkSucc(Interpreter.interpret(cli).run(List(name, a.toString, b.toString)), f(a, b))
@@ -41,18 +43,21 @@ class InterpreterSpec extends DefaultTestSuite {
     "correctly pick-out commands from a cli and interpret them" in {
       forAll { (name: String, int: Int, bool: Boolean, string: String, f: ((Int, Int)) => Int, g: Boolean => Boolean) =>
         val h = (arg: (Boolean, Int, Int)) => g(arg._1) && f(arg._2, arg._3) > 0
-        val cmd1 = (command(name) - argInt - argInt).apply(f)
-        val cmd2 = (command(name) - aBoolean(string)).apply(g)
-        val cmd3 = (command(name) - aBoolean(string) - argInt - argInt).apply (h)
-        val cmd4 = (command(string) - argInt - argInt).apply(f)
-        val cmd5 = (command(string) - aInt(string)).apply (identity)
-        val cli = Cli(cmd1, cmd2, cmd3, cmd4, cmd5)
+        val cmd1 = (>> - command(name) - argInt - argInt).apply(f)
+        val cmd2 = (>> - command(name) - aBoolean(string)).apply(g)
+        val cmd3 = (>> - command(name) - aBoolean(string) - argInt - argInt).apply (h)
+        val cmd4 = (>> - command(string) - argInt - argInt).apply(f)
+        val cmd5 = (>> - command(string) - aInt(string)).apply (identity)
+        val cmd6 = (>> - command(string) - (optA, optB)).apply (identity)
+        val cli = Cli(cmd1, cmd2, cmd3, cmd4, cmd5, cmd6)
         val interpreter = Interpreter.interpret(cli)
         checkSucc(interpreter.run(List(name, int.toString, int.toString)), f((int, int)))
         checkSucc(interpreter.run(List(name, s"$string=$bool")), g(bool))
         checkSucc(interpreter.run(List(name, s"$string=$bool", int.toString, int.toString)), h((bool, int, int)))
         checkSucc(interpreter.run(List(string, int.toString, int.toString)), f((int, int)))
         checkSucc(interpreter.run(List(string, s"$string=$int")), int)
+        checkSucc(interpreter.run(List(string, "-a", "-b")), ())
+        checkSucc(interpreter.run(List(string, "-b", "-a")), ())
       }
     }
 
@@ -60,11 +65,11 @@ class InterpreterSpec extends DefaultTestSuite {
       forAll { (name: String, int: Int, bool: Boolean, string: String, f: ((Int, Int)) => Int, g: Boolean => Boolean) =>
         whenever(name != string) {
           val h = (arg: (Boolean, Int, Int)) => g(arg._1) && f(arg._2, arg._3) > 0
-          val cmd1 = (command(name) - argInt - argInt).apply (f)
-          val cmd2 = (command(name) - aBoolean(string)).apply(g)
-          val cmd3 = (command(name) - aBoolean(string) - argInt - argInt).apply (h)
-          val cmd4 = (command(string) - argInt - argInt).apply (f)
-          val cmd5 = (command(string) - aInt(string)).apply (identity)
+          val cmd1 = (>> - command(name) - argInt - argInt).apply(f)
+          val cmd2 = (>> - command(name) - aBoolean(string)).apply(g)
+          val cmd3 = (>> - command(name) - aBoolean(string) - argInt - argInt).apply (h)
+          val cmd4 = (>> - command(string) - argInt - argInt).apply(f)
+          val cmd5 = (>> - command(string) - aInt(string)).apply (identity)
           val cli = Cli(cmd1, cmd2, cmd3, cmd4, cmd5)
           val interpreter = Interpreter.interpret(cli)
 
@@ -81,11 +86,11 @@ class InterpreterSpec extends DefaultTestSuite {
       forAll { (name: String, int: Int, bool: Boolean, string: String, f: ((Int, Int)) => Int, g: Boolean => Boolean) =>
         whenever(name != string) {
           val h = (arg: (Boolean, Int, Int)) => g(arg._1) && f(arg._2, arg._3) > 0
-          val cmd1 = (command(name) - argInt - argInt).apply (f)
-          val cmd2 = (command(name) - aBoolean(string)).apply(g)
-          val cmd3 = (command(name) - aBoolean(string) - argInt - argInt).apply (h)
-          val cmd4 = (command(string) - argInt - argInt).apply (f)
-          val cmd5 = (command(string) - aInt(string)).apply (identity)
+          val cmd1 = (>> - command(name) - argInt - argInt).apply(f)
+          val cmd2 = (>> - command(name) - aBoolean(string)).apply(g)
+          val cmd3 = (>> - command(name) - aBoolean(string) - argInt - argInt).apply (h)
+          val cmd4 = (>> - command(string) - argInt - argInt).apply(f)
+          val cmd5 = (>> - command(string) - aInt(string)).apply (identity)
           val cli = Cli(cmd1, cmd2, cmd3, cmd4, cmd5)
           val interpreter = Interpreter.interpretH(cli)
 
@@ -103,11 +108,11 @@ class InterpreterSpec extends DefaultTestSuite {
       forAll { (name: String, int: Int, bool: Boolean, string: String, f: ((Int, Int)) => Int, g: Boolean => Boolean) =>
         whenever((name != string) && name.trim.nonEmpty && string.trim.nonEmpty) {
           val h = (arg: (Boolean, Int, Int)) => g(arg._1) && f(arg._2, arg._3) > 0
-          val cmd1 = (command(name) - argInt - argInt).apply (f)
-          val cmd2 = (command(name) - aBoolean(string)).apply(g)
-          val cmd3 = (command(name) - aBoolean(string) - argInt - argInt).apply (h)
-          val cmd4 = (command(string) - argInt - argInt).apply (f)
-          val cmd5 = (command(string) - aInt(string)).apply (identity)
+          val cmd1 = (>> - command(name) - argInt - argInt).apply(f)
+          val cmd2 = (>> - command(name) - aBoolean(string)).apply(g)
+          val cmd3 = (>> - command(name) - aBoolean(string) - argInt - argInt).apply (h)
+          val cmd4 = (>> - command(string) - argInt - argInt).apply(f)
+          val cmd5 = (>> - command(string) - aInt(string)).apply (identity)
           val cli = Cli(cmd1, cmd2, cmd3, cmd4, cmd5)
           val interpreter = Interpreter.interpret(cli)
 

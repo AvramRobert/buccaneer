@@ -2,18 +2,15 @@ package buccaneer
 
 import shapeless._
 import ops.hlist._
-import CommandBuilder._
 import buccaneer.Read.readWhen
 import RoseList._
 
 trait CommandOps {
-  implicit def commandOps(command: Com): CommandBuilder[HNil, HNil, HNil, Unit, Unit] = emptyBuilder - command
 
-  implicit def optionOps(option: Opt): CommandBuilder[HNil, HNil, HNil, Unit, Unit] = emptyBuilder - option
-
-  implicit def argumentOps[A](argument: Arg[A]): CommandBuilder[Read[A] :: HNil, A :: HNil, A :: HNil, Tuple1[A], A] = emptyBuilder - argument
-
-  implicit def assignmentOps[A](assignment: Assgn[A]): CommandBuilder[Read[A] :: HNil, A :: HNil, A :: HNil, Tuple1[A], A] = emptyBuilder - assignment
+  /** Defines a builder context for commands
+    *
+    */
+  val >> : CommandBuilder[HNil, HNil, HNil, Unit, Unit] = CommandBuilder.emptyBuilder
 
   /** Plucks a `Read[A]` instance out of implicit scope
     * and returns it
@@ -21,7 +18,7 @@ trait CommandOps {
     * @tparam A type of `Read`
     * @return `Read[A]` instance
     */
-  def prove[A: Read]: Read[A] = implicitly[Read[A]]
+  private def prove[A: Read]: Read[A] = implicitly[Read[A]]
 
   /** Picks a `Read` instance from implicit scope and
     * transforms it into a constrained `Read`
@@ -30,7 +27,7 @@ trait CommandOps {
     * @tparam A type of `Read`
     * @return constrained `Read` instance
     */
-  def proveWhen[A: Read](p: A => Boolean): Read[A] = readWhen(prove)(p)
+  private def proveWhen[A: Read](p: A => Boolean): Read[A] = readWhen(prove)(p)
 
   /** Creates a command identifier.
     *
@@ -136,11 +133,9 @@ final case class CommandBuilder[K <: HList, H <: HList, R <: HList, T, X]
   : CommandBuilder[Read[A] :: K, A :: H, O, B, C]
   = CommandBuilder(expr prepend assignment, assignment.read :: types, r, t, x, f)
 
-  def -(option: Opt): CommandBuilder[K, H, R, T, X] = CommandBuilder(expr prepend option, types, reverse, tupler, fixer, folder)
-
   def -(command: Com): CommandBuilder[K, H, R, T, X] = CommandBuilder(expr prepend command, types, reverse, tupler, fixer, folder)
 
-  def \ (option: Opt): CommandBuilder[K, H, R, T, X] = CommandBuilder(expr grow option, types, reverse, tupler, fixer, folder) // Think about the associativity of this operation
+  def -(options: Opt*): CommandBuilder[K, H, R, T, X] = CommandBuilder(expr prepend (options: _*), types, reverse, tupler, fixer, folder)
 
   def apply[B](f: X => B): Command[B] = Command(expr, args =>
     attempt(f(fixer(tupler(folder(types, (args.reverse, HNil))._2)))))

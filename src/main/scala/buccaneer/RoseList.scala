@@ -9,12 +9,6 @@ object RoseList { self =>
     case seq => Bundle(seq.toList, roseList)
   }
 
-  def grow[A](roseList: RoseList[A], a: A): RoseList[A] = roseList match {
-    case Bundle(as, link) => Bundle(a :: as, link)
-    case p@Petal(_, _) => Bundle(a :: Nil, p)
-    case Stem => prepend(roseList, a)
-  }
-
   def expand[A](roseList: RoseList[A]): Set[List[A]] = {
     def go(rem: RoseList[A], cur: List[A] = List.empty, total: Set[List[A]] = Set.empty): Set[List[A]] = rem match {
       case Petal(a, t) => go(t, a :: cur, total)
@@ -27,9 +21,6 @@ object RoseList { self =>
 
   implicit class RoseListOps[A](roseList: RoseList[A]) {
     def prepend(as: A*): RoseList[A] = self.prepend(roseList, as: _*)
-
-    def grow(a: A): RoseList[A] = self.grow(roseList, a)
-
     def expand: Set[List[A]] = self.expand(roseList)
   }
 }

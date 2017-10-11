@@ -554,7 +554,7 @@ object Formatter {
       */
     def ofWidth(i: Int): Formatter = widen(_ => i)
 
-    /** Runs the fromatting a returns a complete text
+    /** Runs the formatting a returns a complete text
       * as a String. Does not hyphenate
       *
       * @return the formatted text as a string
