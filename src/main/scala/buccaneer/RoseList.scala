@@ -11,7 +11,7 @@ object RoseList { self =>
 
   def grow[A](roseList: RoseList[A], a: A): RoseList[A] = roseList match {
     case Bundle(as, link) => Bundle(a :: as, link)
-    case Petal(aa, link) => Bundle(a :: aa :: Nil, link)
+    case p@Petal(_, _) => Bundle(a :: Nil, p)
     case Stem => prepend(roseList, a)
   }
 
