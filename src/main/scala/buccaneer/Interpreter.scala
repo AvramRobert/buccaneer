@@ -1,9 +1,7 @@
 package buccaneer
 
 import buccaneer.Cli.Cli
-
-import scalaz.syntax.validation._
-import scalaz.{Failure, Kleisli}
+import scalaz.Kleisli
 import buccaneer.Validators._
 
 /** An ADT for modelling the different types of steps in the interpreter.
@@ -20,7 +18,7 @@ sealed trait Step[+A] {
     */
   def flatMap[B](f: A => Step[B]): Step[B] = this match {
     case Transform(result) => (result map f).fold(
-      x => Transform(Failure(x)),
+      x => Transform(failure(x)),
       identity)
     case Meta(info) => Meta(info)
   }
@@ -46,9 +44,9 @@ sealed trait Step[+A] {
     * @return some value
     */
   def fold[B](success: A => B)
-             (fail: List[Throwable] => B)
+             (fail: Throwable => B)
              (meta: String => B): B = this match {
-    case Transform(result) => result.fold(errs => fail(errs.list.toList), success)
+    case Transform(result) => result.fold(fail, success)
     case Meta(info) => meta(info)
   }
 
@@ -56,7 +54,7 @@ sealed trait Step[+A] {
     * It uses a pre-defined formatting for errors.
     *
     */
-  def print: Unit = fold(println)(errs => formatErrors(errs) foreach println)(println)
+  def print: Unit = foreach(println)
 
   /** Applies a side-effecting function on the success value of an
     * interpretation. Automatically prints errors and
@@ -64,19 +62,15 @@ sealed trait Step[+A] {
     *
     * @param f side-effecting function
     */
-  def foreach(f: A => Unit): Unit = fold(f)(errs => formatErrors(errs) foreach println)(println)
+  def foreach(f: A => Unit): Unit = fold(f)(formatError _ andThen println)(println)
 
   /** Minimalistic formatting for errors.
     *
-    * @param errors the errors to be formatted
+    * @param error to be formatted
     * @return a list of formatted strings
     */
-  def formatErrors(errors: List[Throwable]): List[String] = {
-    (Formatter(s"Command failed (${errors.size} errors):") ::
-      errors.
-        zipWithIndex.
-        map(t => Formatter(s"${t._2 + 1}. ${t._1.toString}").push(2))).
-      map(_.runMake)
+  private def formatError(error: Throwable): String = {
+    Formatter(s"Failed - ${error.toString}").runMake
   }
 }
 
@@ -117,7 +111,7 @@ object Interpreter {
         forall {
           case (Com(label, _), value) => label startsWith value
           case (Opt(labels, _), value) => labels exists (label => label startsWith value)
-          case (Arg(read, _), value) => read(value).isSuccess
+          case (Arg(read, _), value) => read(value).isRight
           case (Assgn(labels, _, _, _), value) => labels exists (label => (label startsWith value) || (value startsWith label))
         }
     }
@@ -210,10 +204,11 @@ object Interpreter {
     */
   def interpolate(commands: Set[Expr[Any]]) = transform { (input: List[String]) =>
     val args = if (input.isEmpty) List("") else input
-    commands.
-      filter(_.size == args.size).
-      map(x => traverseList.zipL(x, args)).
-      successNel
+    success {
+      commands.
+        filter(_.size == args.size).
+        map(x => traverseList.zipL(x, args))
+    }
   }
 
   /** Strictly validates the syntax and types of an interpolated AST.
@@ -221,12 +216,12 @@ object Interpreter {
     * @return List of AST's that pass the validation
     */
   def validate = transform { candidates: Set[AST[Any]] =>
-    candidates.
-      filter { candidate =>
-        Validators.validate(candidate)(syntax).isSuccess &&
-        Validators.validate(candidate)(types).isSuccess
-      }.
-      successNel
+    success {
+      candidates.filter { candidate =>
+          candidate.forall(x => syntax(x).isRight) &&
+          candidate.forall(x => types(x).isRight)
+        }
+    }
   }
 
   /** Picks the final command Expr from a list of possible Exprs.
@@ -239,7 +234,7 @@ object Interpreter {
     */
   def pick = transform { (commands: Set[AST[Any]]) =>
     commands match {
-      case set if set.isEmpty => failure("No command found matching input")
+      case set if set.isEmpty => failure("Input doesn't match any command")
       case set if set.size == 1 => success(set.head)
       case set => failure {
         s"Ambiguous input. There are ${set.size} matches for this input\n${
@@ -279,8 +274,6 @@ object Interpreter {
 }
 
 object Validators {
-
-  def validate[A](v: List[A])(f: A => Result[A]): Result[List[A]] = traverseList.traverse(v)(f)
 
   /** Function for validating the syntax of an input against its expectation.
     *

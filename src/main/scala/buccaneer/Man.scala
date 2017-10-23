@@ -123,10 +123,10 @@ object Man {
     * @return string representation of either input or denotation
     */
   def sow(value: (Denotation[Any], Option[String])): String = value match {
-    case (c@Com(_, _), i@Some(v)) if Validators.syntax((c, i)).isSuccess => v
-    case (o@Opt(_, _), i@Some(v)) if Validators.syntax((o, i)).isSuccess => v
-    case (a@Arg(_, _), i@Some(v)) if Validators.types((a, i)).isSuccess => v
-    case (a@Assgn(_, _, _, _), i@Some(v)) if Validators.syntax((a, i)).isSuccess && Validators.types((a, i)).isSuccess => v
+    case (c@Com(_, _), i@Some(v)) if Validators.syntax((c, i)).isRight => v
+    case (o@Opt(_, _), i@Some(v)) if Validators.syntax((o, i)).isRight => v
+    case (a@Arg(_, _), i@Some(v)) if Validators.types((a, i)).isRight => v
+    case (a@Assgn(_, _, _, _), i@Some(v)) if Validators.syntax((a, i)).isRight && Validators.types((a, i)).isRight => v
     case (x, _) => x.show
   }
 
