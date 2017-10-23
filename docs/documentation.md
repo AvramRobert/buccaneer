@@ -30,26 +30,23 @@ val multiply = command("multiply")
 val divide = command("divide")
 val int = argument[Int]
 
-val adder = (add - int - int)(_ + _) // add 1 2
-val subtractor = (subtract - int - int)(_ - _) // subtract 2 1
-val multiplier = (multiply - int - int)(_ * _) // multiply 2 3
-val divider = (divide - int - int)(_ / _) // divide 2 2
+val adder = (>> - add - int - int).apply { case (a, b) => a + b }
+val subtractor = (>> - subtract - int - int).apply { case (a, b) => a - b }
+val multiplier = (>> - multiply - int - int).apply { case (a, b) => a * b } 
+val divider = (>> - divide - int - int).apply { case (a, b) => a / b }
 ```
 As you can see, each command essentially _describes_ what it expects and has a
 function block associated with each expectation. *buccaneer* also makes sure that the function
-block you associate also has the arity and parametricity you specified in the description. <br />
+block you associate also is of a Tuple of the arity and parametricity you specified in the description. <br />
 More concretely: 
 ```scala
-
-(add) { () => ... } //arity 0
-(add - int) { a => ... } //arity 1, a: Int
-(add - int - int) { (a, b) => ... } //arity 2, a,b: Int
-(add - int - int - argument[Double]) { (a, b, c) => 
-// arity 3, a,b: Int, c: Double
-}
+(>> - add) { () => ... } //Unit
+(>> - add - int) { a => ... } // Int
+(>> - add - int - int) { ((a, b)) => ... } // (Int, Int)
+(>> - add - int - int - argument[Double]) { ((a, b, c)) => // (Int, Int, Double) }
 // and so on
 ```
-#### Building commands
+### Building commands
 Commands are built using only 4 primitives:
 * `command(<name>)` 
     * a command or sub-command identifier
@@ -58,51 +55,24 @@ Commands are built using only 4 primitives:
 * `option(<name>*)` 
     * an option identifier
     * it accepts a variable number of names and treats them as alternatives
-* `assignment[A](<name>)` 
+* `assignment[A](<name>)(<op>)` 
     * an association between a name and a type (for things like `a=5`)
     * it accepts a variable number of names and treats them as alternatives
-    
-Additionally, arguments and assignments may accept conditionals, that further check the input value:
-```scala
-val posInt = argument[Int]((i: Int) => i > 0)
-val posAssign = assignment[Int]((i: Int) => i > 0)("a=")
-```
-The reason you  have to specify a type here is because of Scala's left-to-right
-flowing type inference, which cannot infer a lambda's type if it
-is defined within the first parameter list. 
 
-**Usage**
-<br />
-So now, how'd you use them? Well:
-```scala 
-val r = option("-r", "--r")
+As seen in the previous section, you use these primitives to define simple building blocks and compose those together
+to form commands:
+```scala
+val inc = command("inc")
+val int = argument[Int]
 val double = argument[Double]
-val aDouble = assignment[Double]("a=")
-val bDouble = assignment[Double]("b=")
+val minusI = option("-i", "--int")
+val minusD = option("-d", "--double")
 
-val addRecursive = (add - r - int - int)(_ + _) // add -r 1 2
-val addAssignedDouble = (add - aDouble - aDouble)(_ + _) // add a=2.0 b=4.0
+val incInts = (>> - inc - minusI - int).apply(_ + 1)
+val incDoubles = (>> - inc - minusD - double).apply(_ + 1.0)
 ```
 
-
-**No argument commands**
-<br />
-What if I want a command that takes no arguments or options? 
-In this case, you would be running your program effectively with no input. <br />
-In general, functions with no arguments are essentially functions from `Unit => A`. <br />
-*buccanneer* has the same behaviour:
-```scala
-val nothing = argument[Unit]
-
-val withoutInput = (nothing) { () => 
-  println("I hope you've not expected much.") 
-}    
-```
-
-And that's it. All you have to do is simply mix these primitives together to create
-more complex commands. 
-
-### Types and Values
+#### Types and Values
 When declaring a type argument or type assignment,
 a `Read[A]` instance for that particular type is implicitly required. The `Read[A]` instance 
 defines how a string should be converted to that
@@ -141,54 +111,67 @@ order to avoid ambiguity. <br />
     * string paths
     * Example: _/home/myfiles/Downloads_
 
-
-You can however also define your own instances. <br />
+##### Defining your own Read[A]
 **Note**: Because `Read[A]` instances also contain a string representation
-of their type `A`, this has to also be specified with its definition.
+of their type `A`, this also has to be specified with its definition.
 
 ```scala
-import buccaneer.Read._
+import buccaneer.Read
 
 case class Fraction(num: Int, denom: Int)
 
-implicit val readFraction: Read[Fraction] = read("Fraction") { (input: String) => 
+implicit val readFraction: Read[Fraction] = Read("Fraction") { (input: String) => 
   if(input.contains("/") && input.split("/").length == 2) {
     val split = input.split("/")
-    success(Fraction(split(0).toInt, split(1).toInt))
+    Read.success(Fraction(split(0).toInt, split(1).toInt))
   } else {
-    failure(s"Input of $input is not a fraction")
+    Read.failure(s"Input of $input is not a fraction")
   }
 }
 ```
-Moreover, the concrete signature of a `Read[A]` conversion is `String => Result[A]`, where 
-`Result[A]` is a scalaz `ValidationNel[Throwable, A]`. This means that you can actually 
-accumulate all the errors when converting from  `String => A`.
-For example:
+
+If any exceptions are thrown in the `Read[A] { }` block, they will be caught and
+gracefully wrapped in an error type.
+    
+    
+##### Constrained arguments
+Arguments and assignments may accept conditionals, that further constrain the input value:
+```scala
+val posInt = argument[Int]((i: Int) => i > 0)
+val posAssign = assignment[Int]((i: Int) => i > 0)("a=")
+```
+
+##### No-argument commands
+What if I want a command that takes no arguments or options? 
+In this case, you would be running your program effectively with no input. <br />
+In general, functions with no arguments are essentially functions from `Unit => A`. <br />
+*buccanneer* has the same behaviour:
 
 ```scala
-import buccaneer.Read._
-import buccaneer.Implicits.readInt
-import scalaz.syntax.validation._
+val nothing = argument[Unit]
 
-case class Fraction(num: Int, denom: Int)
-
-implicit val readFraction: Read[Fraction] = read("Fraction") { (input: String) => 
-  if (input.contains("/") && input.split("/").length == 2) {
-    val split = input.split("/")
-    (readInt(split(0)) |@| readInt(split(1))) {
-      (num, denom) => Fraction(num, denom)
-    }
-  } else {
-    failure("Input is not a fraction.")
-  }
-}
+val withoutInput = (>> - nothing).apply { () => 
+  println("I hope you've not expected much.") 
+}    
 ```
+
+##### Exhaustive options
+**buccaneer** can exhaustively permute all options in a command to avoid redundant 
+repetition:
+
+```scala
+val minusR = option("-r")
+val minusD = option("-d")
+val minusV = option("-v")
+val permuted = (>> - add - (minusR, minusD, minusV) - listInts).apply(_.sum)
+```
+Here "-r", "-d" and "-v" may occur in any order. 
 
 ### Running commands
 Commands are run by _interpreting_ a command line input relative to a command signature. 
 The input is taken and matched against that signature. If the input
 conforms to the signature, then the function associated with it is run.
-Otherwise, the inconsistencies and errors are accumulated and returned as a failure. 
+Otherwise an error wrappend in an appropriate error type is returned. 
 <br />
 <br />
 *buccaneer* comes with a number of interpreters that do all of this and
@@ -205,14 +188,14 @@ Interpreter.
 Interpreter.
   interpret(multiplier).
   run(badInput).
-  fold(println)(println)(println) // => List[Throwable] => ...
+  fold(println)(println)(println) // => Error
 ```
 Wait, why the fold? <br />
 The reason we `fold` is because the result of an interpretation can be one of three things: 
 * Success: `A => B` - the "happy" case. Here, the supplied input matched the signature and the 
 function associated with it had been run. Now you are required to do something 
  with the result of that function, that is of type `A`. 
-* Failure: `List[Throwable] => B` - the "sad" case. Here, the supplied input has either not 
+* Failure: `Throwable => B` - the "sad" case. Here, the supplied input has either not 
 matched the signature, or some parts of the input have been proven malformed. Now you are required to
 do something with the errors that have been accumulated. 
 * Meta: `String => B` - the "informative" case. This case is specifically reserved for when the 
@@ -229,7 +212,7 @@ Intepreter.
   print
 ```
 Should you however want to perhaps modify the result before printing, 
-then the `fold` allows you directly handle the result of an interpretation. 
+then the `fold` gives you direct control over the result of an interpretation. 
 
 ### Creating a command line interface
 Now that we have commands and know how to run them, it is time to define a complete interface. 
@@ -239,14 +222,13 @@ you've defined so far:
 val interface: Cli[Int] = Cli(adder, subtractor, multiplier, divider)
 ```
 This `Cli[Int]`-thing is actually just a `Map` from command signatures to the 
-commands themselves. One interesting thing about it is that its type parameter will automatically
-be inferred to `Any` if the result type of two or more commands are not homogeneous.
+commands themselves. One interesting thing about it is that its type parameter is covariant 
+and will automatically widen to `Any` should the result type of two or more commands not be homogeneous.
 <br />
 <br />
 To run command inputs against the whole interface, we need only feed it to one of the interpreters.
-There are interpreters for handling both single commands, but also complete interfaces. In the
-latter case, it will automatically resolve and find the command signature that
-matches the given input, and run its associated function. If no command is found, or the input is 
+When interpreting an interface, it will automatically resolve the command signature that
+matches the given input and run its associated function. If no command is found, or the input is 
 malformed, then it shall appropriately return a failure:
 
 ```scala
@@ -266,11 +248,6 @@ run(input1) // => 1
 run(input2) // => 1
 run(input3) // => No command found
 ```
-**Note:** Because the intepreter has to essentially first determine which command signature best fits the
-provided input, it does not know a priori what exact description will match. As such, in the case of
-complete interfaces, it cannot aggregate errors and output them. If it were to do so, 
-then it would return the errors of *all* command signatures it tried to match against but failed. 
-Instead, in case of failure, it simply says that a command has not been found. 
 
 ##### `Read[A]` ambiguities
 A `Read[A]` ambiguity may occur when two or more `Read[A]` instances are 
@@ -291,10 +268,10 @@ listInt("1") // success
 ```
 When reading a single `Int` string, both the `argInt` and `listInt` will happily 
 consume that input. `argInt` will convert it to a single integer, whilst 
-`listInt` will convert it to a list of one integer. The same goes for one-element maps and
-assignments using `=`: 
+`listInt` will convert it to a list of one integer. The same goes for any other type of collection.
+For maps, the same can be reproduced with assignments using the operator `=`: 
 ```scala
-val assignInt = assignment[Int]("a=")
+val assignInt = assignment[Int]("a")("=")
 val mapInt = argument[Map[String, Int]]
 
 assignInt("a=5") // success
@@ -303,15 +280,15 @@ mapInt("a=5") // success
 Should a command line application contain such cases: 
 ```scala
 val cli = Cli (
-(negate - argInt)(_ * -1),
-(negate - listInt)(_ map(_ * -1)))
+(>> - negate - argInt).apply (_ * -1),
+(>> - negate - listInt).apply (_ map(_ * -1)))
 
 Interpreter.
   intrepret(cli).
-  run(List("5")). // ambigous 
+  run(List("5")). // ambiguous 
   print
 ```
-Then the result of interpreting such an input will lead to ambiguity and thus an error.
+then the result of interpreting such an input will lead to ambiguity and thus an error.
 The error will explicitly state which conversions came into conflict. 
 <br />
 <br />
@@ -332,10 +309,10 @@ val int = argument[Int].msg("An integer argument")
 vall double = argument[Double].msg("A double argument")
 
 val interface = Cli(
-  (add - int - int)(_ + _),
-  (add - double - double)(_ - _),
-  (subtract - int - int)(_ - _),
-  (subtract - double - double)(_ - _))
+  (>> - add - int - int).apply { case (a, b) => a + b },
+  (>> - add - double - double).apply { case (a, b) => a + b) },
+  (>> - subtract - int - int).apply { case (a, b) => a - b },
+  (>> - subtract - double - double).apply { case (a, b) => a - b })
 ```
 In order to receive MAN page support, you need only use the interpreter that 
 builds this feature in:
@@ -347,12 +324,9 @@ Interpreter.
   print
 }
 ```
-`interpretHS` is the interpreter that supports both features. There are also interpreters that 
-support each feature individually, namely `interpretH` (for MAN pages) and `interpretS` (for suggestions).
-<br />
+`interpretHS` is the interpreter that supports these additional features. 
 Now, any time a command input ends with `-help` or `--help` (you can change these), 
-the interpreter will compile a MAN page using the command
-signatures and then print it. 
+the interpreter will compile a MAN page using the command signatures and return it. 
 <br />
 <b>Note</b>: `-help` or `--help` can be called at any point during command input.
 ```scala
@@ -403,13 +377,13 @@ SUB-COMMANDS
 
 ##### Input suggestions
 Again, due to the way commands signatures are modeled, the system is able to support 
-dynamic input suggestions. Any time a command input ends with `-sgst` or
-`--sgst` (you can change these), the interpreter will use the command signatures to compile a list of suggestions that 
+dynamic input suggestions. Any time a command input ends with `-suggest` or
+`--suggest` (you can change these), the interpreter will use the command signatures to compile a list of suggestions that 
 partially match that given input. 
 <br />
 <b>Note</b>: Similar to MAN pages, these can be called at any point during invocation:
 ```scala
-runPrint(List("subtract","--sgst"))
+runPrint(List("subtract","--suggest"))
 ```
 Will print something along the lines of: 
 ```bash
@@ -419,28 +393,29 @@ Will print something along the lines of:
 
 Whilst:
 ```scala
-runPrint(List("subtract", "1", "--sgst"))
+runPrint(List("subtract", "1", "--suggest"))
 ```
-Will narrow down accordingly and print:
+Will narrow down and replace valid input accordingly:
 ```bash
-<Int> <Int>
+1 <Int>
 ```
 
 ##### Configuration 
 You are additionally given the possibility to configure the MAN page.
 More concretely, you can provide the following information:
-* **Application name**
+* **Application metadata**
   * This is a somewhat necessary requirement, as I do not really have direct access to how
   the application is called. Essentially it should be the `<name>` in `<name> add 1 2`.
-  This gets printed in the MAN page.
-* **Application description**
-  * A description of the application. This gets printed next to the **Application name**.
+  This is defined as any other command:
+  ```scala
+  val myapp = command("myapp").msg("My app description")
+  ```
 * **Help**
   * You can change the options that trigger both the MAN page and input suggestions. 
     Because they are simply options, you define them analogously to how command
     options are defined. These however get passed to the configuration instead of the CLI itself.
     ```scala
-    val myhelp = option("-h", "--help").msg("Prints this page.")
+    val myhelp = option("-h", "--help").msg("Prints this page")
     ```
 *  **Suggestions**
    * Analogous to **Help**:

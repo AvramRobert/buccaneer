@@ -10,7 +10,7 @@ More descriptive information can be found here:
 ```scala
 resolvers += Resolver.bintrayRepo("robertavram","maven")
 
-libraryDependencies += "com.polymorph" %% "buccaneer" % "0.1.2"
+libraryDependencies += "com.polymorph" %% "buccaneer" % "0.2.0"
 ```
 
 #### For the impatient
@@ -27,13 +27,13 @@ import buccaneer.Implicits._
 val add = command("add")
 val int = argument[Int]
 
-val adder = (add - int - int)(_ + _)
+val adder = (>> - add - int - int).apply { case (a, b) => a + b }
 ```
 As you can see, you define the name of your command, what parameters it takes and then associate a 
 function block with them. *buccaneer* makes sure that the associated function will always require 
-the exact arguments and arity that you've defined in your description.  
-In the above example, the command takes 2 ints and therefore the associated function has an arity of two 
-with types `(Int, Int)`. 
+a Tuple with the exact arguments and arity that you've defined in your description.  
+In the above example, the command takes 2 ints and therefore the associated function is a
+function from a tuple of `(Int, Int)` to some `B`. 
 
 To run the command and print its result, you need only feed it 
 to one of the provided command interpreters and give it the list of arguments necessary in order
@@ -61,28 +61,49 @@ All the primitives required for building commands are:
     * an option identifier
 * `assignment[A](<name>*)` 
     * an association between a name and a type (for things like `a=5`)
-    
-Compound things like Lists and Maps are just types, that you define as type arguments. For example: 
+   
+##### Collections 
+Collections like Lists and Maps are just types, that you define as type arguments. For example: 
 ```scala
 val listInts = argument[List[Int]]
-val addList = (add - listInts)(_.sum)
+val addList = (>> - add - listInts).apply(_.sum)
 ```
 
-Additionally, arguments and assignments may also be constrained by a conditional, that futher check the input value: 
+##### Constrained arguments
+Arguments and assignments may also be constrained by a conditional, that further constrain the input value: 
  ```scala
- 
 val posInt = argument[Int]((i: Int) => i > 0)
 val posA = assignment[Int]((i: Int) => i > 0)("a=")
 ```
 **Note:** The type has to be specified here due to Scala's left-to-right flowing type inference, which cannot properly infer
 the type of the function. 
-<br />
-<br />
+
+##### No-argument commands
 No argument or option commands are defined as commands of a single `Unit` argument:
 ```scala
 val nothing = argument[Unit]
 
-(nothing) {_ => println("I run with no input") }
+(>> - nothing).apply {_ => println("I run with no input") }
+```
+
+##### Exhaustive options
+**buccaneer** can exhaustively permute all options in a command to avoid redundant 
+repetition:
+
+```scala
+val minusR = option("-r")
+val minusD = option("-d")
+val minusV = option("-v")
+val permuted = (>> - add - (minusR, minusD, minusV) - listInts).apply(_.sum)
+
+val input1 = List("add", "-r", "-d", "-v", "1,2,3")
+val input2 = List("add", "-d", "-r", "-v", "1,2,3")
+val input3 = List("add", "-v", "-r", "-d", "1,2,3")
+
+
+Interpreter.interpret(permuted).run(input1) // 6
+Interpreter.interpret(permuted).run(input2) // 6
+Interpreter.interpret(permuted).run(input3) // 6
 ```
 
 #### Command line interfaces
@@ -100,12 +121,12 @@ val listInts = argument[List[Int]]
 
 val interface: Cli[Int] = 
 Cli(
-(add - int - int)(_ + _),
-(add - double - double)(_ + _),
-(add - listInts)(_.sum),
-(add - r - listInts)(_.sum),
-(subtract - int - int)(_ - _),
-(subtract - double - double)(_ - _))
+(>> - add - int - int).apply { case (a, b) => a + b },
+(>> - add - double - double).apply { case (a, b) => a + b },
+(>> - add - listInts).apply(_.sum),
+(>> - add - r - listInts).apply(_.sum),
+(>> - subtract - int - int).apply { case (a, b) => a - b },
+(>> - subtract - double - double).apply { case (a, b) => a - b )
 ```
 This `Cli[Int]`-thing can also be interpreted and run. 
 In this case, the interpreter automatically picks the appropriate command 
