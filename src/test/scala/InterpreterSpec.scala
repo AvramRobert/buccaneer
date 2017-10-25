@@ -8,11 +8,11 @@ class InterpreterSpec extends DefaultTestSuite {
 
     val msg = "Shouldnt've gotten here"
 
-    val noCommandFound = (t :Throwable) => t.getMessage == "Input doesn't match any command"
+    val noCommandFound = (t: String) => t == "Input doesn't match any command"
 
     def checkSucc[A <: Any, B](s: Step[A], expected: B) = s.fold(_ shouldBe expected)(_ => fail(msg))(_ => fail(msg))
 
-    def checkFail[A <: Any](s: Step[A])(p: Throwable => Boolean) = s.fold(_ => fail(msg))(l => p(l) shouldBe true)(_ => fail(msg))
+    def checkFail[A <: Any](s: Step[A])(p: String => Boolean) = s.fold(_ => fail(msg))(l => p(l) shouldBe true)(_ => fail(msg))
 
     def checkMeta[A <: Any](s: Step[A])(p: String => Boolean) = s.fold(_ => fail(msg))(_ => fail(msg))(s => p(s) shouldBe true)
 

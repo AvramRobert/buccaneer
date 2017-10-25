@@ -44,7 +44,7 @@ sealed trait Step[+A] {
     * @return some value
     */
   def fold[B](success: A => B)
-             (fail: Throwable => B)
+             (fail: String => B)
              (meta: String => B): B = this match {
     case Transform(result) => result.fold(fail, success)
     case Meta(info) => meta(info)
@@ -69,8 +69,8 @@ sealed trait Step[+A] {
     * @param error to be formatted
     * @return a list of formatted strings
     */
-  private def formatError(error: Throwable): String = {
-    Formatter(s"Failed - ${error.toString}").runMake
+  private def formatError(error: String): String = {
+    Formatter(s"Failed - $error").runMake
   }
 }
 

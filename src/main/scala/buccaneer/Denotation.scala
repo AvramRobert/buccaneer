@@ -21,9 +21,9 @@ sealed trait Denotation[+A] {
 
   def show: String = this match {
     case Com(label, _) => label
-    case Opt(labels, _) => labels.mkString("|")
+    case Opt(labels, _) => labels.mkString(" | ")
     case Arg(read, _) => s"<${read.show}>"
-    case Assgn(labels, op, read, _) => labels.map(s => s"$s$op<${read.show}>").mkString("|")
+    case Assgn(labels, op, read, _) => labels.map(s => s"$s$op<${read.show}>").mkString(" | ")
   }
 
   override def toString: String = show

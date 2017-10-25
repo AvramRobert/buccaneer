@@ -137,8 +137,11 @@ object Man {
     * @return size of the largest from `all`
     */
   def largest(all: Set[AST[Any]]): Int = {
-    if(all.isEmpty) 0
-    else all.map(_.map(_._1).mkString("").length).max
+    def max(t: TraversableOnce[Int]): Int = {
+      if(t.isEmpty) 0
+      else t.max
+    }
+    max(all.map { expr => max (expr.map(_._1.show.length)) })
   }
 
   def pairedSection(f: ManConfig => Set[AST[Any]]): Section[List[Formatter]] = section { config =>

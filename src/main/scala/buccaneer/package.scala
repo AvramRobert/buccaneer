@@ -6,11 +6,11 @@ package object buccaneer {
   type Args = List[String]
   type Expr[A] = List[Denotation[A]]
   type AST[A] = List[(Denotation[A], Option[String])]
-  type Result[A] = \/[Throwable, A]
+  type Result[A] = \/[String, A]
 
   def success[A](a: A): Result[A] = \/-(a)
-  def failure[A](t: Throwable): Result[A] = -\/(t)
-  def failure[A](message: String): Result[A] = failure(new Throwable(message))
+  def failure[A](t: Throwable): Result[A] = failure(t.toString)
+  def failure[A](message: String): Result[A] = -\/(message)
   def attempt[A](eff: => A): Result[A] = try { success(eff) } catch { case NonFatal(t) => failure(t) }
 
   implicit lazy val traverseList: Traverse[List] = listInstance

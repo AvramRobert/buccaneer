@@ -4,7 +4,6 @@ import java.io.File
 import buccaneer.Read._
 import scala.collection.generic.CanBuildFrom
 import scala.language.implicitConversions
-import scalaz.syntax.applicative._
 
 trait ReadImplicits {
   implicit val readUnit: Read[Unit] = Read("Nothing") { input =>

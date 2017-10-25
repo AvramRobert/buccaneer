@@ -14,7 +14,7 @@ object Read {
   def read[A](typeName: String)(f: String => Result[A]): Read[A] = apply(typeName)(f)
   def attempt[A](typeName: String)(f: String => A): Read[A] = Read[A](typeName)(unsafeCoerce(_)(f))
   def readWhen[A](r: Read[A])(p: A => Boolean): Read[A] = Read[A](r.show){ a =>
-      r(a).ensure(new Throwable("Unmet value constraint"))(p)
+      r(a).ensure("Unmet value constraint")(p)
   }
   def unsafeCoerce[A](s: String)(f: String => A): Result[A] =
     try { success(f(s)) } catch { case NonFatal(t) => failure(t) }
