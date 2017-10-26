@@ -10,7 +10,7 @@ More descriptive information can be found here:
 ```scala
 resolvers += Resolver.bintrayRepo("robertavram","maven")
 
-libraryDependencies += "com.polymorph" %% "buccaneer" % "0.2.0"
+libraryDependencies += "com.polymorph" %% "buccaneer" % "1.0.0"
 ```
 
 #### For the impatient
@@ -126,7 +126,7 @@ Cli(
 (>> - add - listInts).apply(_.sum),
 (>> - add - r - listInts).apply(_.sum),
 (>> - subtract - int - int).apply { case (a, b) => a - b },
-(>> - subtract - double - double).apply { case (a, b) => a - b )
+(>> - subtract - double - double).apply { case (a, b) => a - b })
 ```
 This `Cli[Int]`-thing can also be interpreted and run. 
 In this case, the interpreter automatically picks the appropriate command 
@@ -147,7 +147,7 @@ runPrint(List("subtract", "2.012321", "1.2323"))
 #### MAN pages and input suggestions
 Finally, there is one last interpreter called `interpretHS`, which provides automatic MAN page generation and
 input suggestions. These can be triggered at any point throughout the invocation. To trigger them, an input 
-must always either end with `-help | --help` (for MAN pages) or `-sgst  | --sgst` (for suggestions). 
+must always either end with `-help | --help` (for MAN pages) or `-suggest  | --suggest` (for suggestions).
 (*Note*: These keywords are configurable): 
 ```scala
 def runPrint(input: List[String]) = {
@@ -159,8 +159,8 @@ def runPrint(input: List[String]) = {
 
 runPrint(List("subtract", "--help"))
 runPrint(List("subtract", "1", "--help"))
-runPrint(List("subtract", "--sgst"))
-runPrint(List("subtract", "1", "--sgst"))
+runPrint(List("subtract", "--suggest"))
+runPrint(List("subtract", "1", "--suggest"))
 ```
 
 What do they print? 
@@ -188,14 +188,14 @@ SUB-COMMANDS
     <...>                             <...>
 ```
 
-For our `subtract` command from earlier, `--sgst` would print something like: <br />
+For our `subtract` command from earlier, `--suggest` would print something like: <br />
 ```bash
 <Int> <Int> 
 <Double> <Double>
 ```
-For a more specific input, e.g. `subtract 1 --sgst`, this get's narrowed down appropriately:
+For a more specific input, e.g. `subtract 1 --suggest`, this get's narrowed down appropriately:
 ```bash
-<Int> <Int>
+1 <Int>
 ```
 #### Final thoughts
 And that's about it.
