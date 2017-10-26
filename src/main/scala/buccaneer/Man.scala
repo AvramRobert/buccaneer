@@ -64,6 +64,15 @@ object Man {
 
   lazy val missing = Vector.empty[Formatter]
 
+  type Zip[A] = List[(A, Option[String])]
+  def keep[A](ast: Zip[A])(p: A => Boolean): List[A] = ast.takeWhile { x =>  p(x._1) && x._2.isDefined }.map(_._1)
+  def discard[A](ast: Zip[A])(p: A => Boolean): List[A] = ast.dropWhile { x => p(x._1) && x._2.isDefined }.map(_._1)
+
+  def keepKnownCommands(ast: AST[Any]): List[Denotation[Any]] = keep(ast)(_.isCommand)
+  def discardKnownCommands(ast: AST[Any]): List[Denotation[Any]] = discard(ast)(_.isCommand)
+  def discardKnown(ast: AST[Any]): List[Denotation[Any]] = discard(ast)(_ => true)
+  def isSubCommand(ast: List[Denotation[Any]]): Boolean = ast.headOption exists (_.isCommand)
+
   def section[A](f: ManConfig => A): Section[A] = Reader(f)
 
   /** Creates a empty section of text, that will return an empty formatter
@@ -114,8 +123,7 @@ object Man {
     * @param command command shape
     * @return a vector of tuples containing the element string form and its documentation
     */
-  def paired(command: AST[Any]): List[(String, String)] = command.map { d => (d._1.show, d._1.description) }
-
+  def paired(command: Expr[Any]): List[(String, String)] = command.map { d => (d.show, d.description) }
 
   /** Validates an input against its denotation and returns
     * the input if valid, otherwise the denotation `show`
@@ -136,15 +144,15 @@ object Man {
     * @param all vector of command shapes
     * @return size of the largest from `all`
     */
-  def largest(all: Set[AST[Any]]): Int = {
+  def largest(all: Set[Expr[Any]]): Int = {
     def max(t: TraversableOnce[Int]): Int = {
       if(t.isEmpty) 0
       else t.max
     }
-    max(all.map { expr => max (expr.map(_._1.show.length)) })
+    max(all.map { expr => max (expr.map(_.show.length)) })
   }
 
-  def pairedSection(f: ManConfig => Set[AST[Any]]): Section[List[Formatter]] = section { config =>
+  def pairedSection(f: ManConfig => Set[Expr[Any]]): Section[List[Formatter]] = section { config =>
     val items = f(config)
     val max = largest(items)
     val empty = List[(String, String)]()
@@ -163,15 +171,11 @@ object Man {
     * @return section of text that will create the formatted block of text when given a `ManConfig`
     */
   def command(all: Set[AST[Any]]): Section[List[Formatter]] = pairedSection { config =>
-    lazy val program = (config.program, None)
     all.headOption.
-      flatMap(_.takeWhile(x => x._1.isCommand && x._2.isDefined).lastOption).
-      map {
-        case (c@Com(_, _), i) => (c, i)
-        case _ => program
-      }.
-      orElse(Some(program)).
-      map(List[(Denotation[Any], Option[String])](_)).
+      map(keepKnownCommands).
+      flatMap(_.lastOption).
+      orElse(Some(config.program)).
+      map(List(_)).
       toSet
   }
 
@@ -181,11 +185,7 @@ object Man {
     * @return a section containing a vector of all subcommands in text form
     */
   def subcommands(all: Set[AST[Any]]): Section[List[Formatter]] = pairedSection { _ =>
-    all.map { sast =>
-      sast.
-        dropWhile(x => x._1.isCommand && x._2.isDefined).
-        filter(_._1.isCommand)
-    }
+    all.map { x => discardKnownCommands(x).filter(_.isCommand) }
   }
 
   /** Creates the option section of a MAN page.
@@ -194,10 +194,10 @@ object Man {
     * @return a section containing a vector of all options in text form
     */
   def options(all: Set[AST[Any]]): Section[List[Formatter]] = pairedSection { config =>
-    val meta = (config.help, None) :: (config.suggest, None) :: Nil
-    all.map(_.dropWhile(_._2.isDefined)).
-      filterNot(_.headOption exists (_._1.isCommand)).
-      map(_.filter(_._1.isOption)).
+    val meta = config.help :: config.suggest :: Nil
+    all.map(discardKnown).
+      filterNot(isSubCommand).
+      map(_.filter(_.isOption)).
       map(_ ++ meta)
   }
 
@@ -207,13 +207,28 @@ object Man {
     * @return section of text that will create the formatted block of text when given a `ManConfig`
     */
   def usages(all: Set[AST[Any]]): Section[List[Formatter]] = section { config =>
-    all.map(_.dropWhile(_._2.isDefined)).
-      filterNot(_.headOption exists (_._1.isCommand)).
-      flatMap(_.filterNot(_._1.isCommand)).
-      map(x => s"[${x._1.show}]").
+    val command =
+      all.headOption.
+        map(keepKnownCommands).
+        map(_.map(_.show).mkString(" ")).
+        flatMap(x => if (x.isEmpty) None else Some(Formatter(x))).
+        getOrElse(Formatter(config.program.show))
+
+    all.map(discardKnown).
+      filterNot(isSubCommand).
+      flatten.
+      map(x => s"[${x.show}]").
       grouped(3).
       toList.
-      map(x => Formatter(x.mkString(" ")).widen(_ + config.indentation).push(config.indentation))
+      take(10).
+      map(x => Formatter(x.mkString(" "))) match {
+      case h :: t =>
+        val padding = command.breadth + config.indentation + 1
+        (command.fill(1) concat h).
+          ofWidth(h.breadth + padding).
+          push(config.indentation) :: t.map(_.push(padding).widen(_ + padding))
+      case Nil => Nil
+    }
   }
 
   /** Creates a complete text from a collection of formatters.
